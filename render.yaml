@@ -1,0 +1,36 @@
+services:
+  # EchoMind AI FastAPI Backend with WebSockets
+  - type: web
+    name: echomind-ai-backend
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: BACKBOARD_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: openrouter
+      - key: AI_MODEL
+        value: meta-llama/llama-3.1-8b-instruct
+      - key: SECRET_KEY
+        generateValue: true
+
+  # EchoMind AI Vite React Frontend
+  - type: web
+    name: echomind-ai-frontend
+    runtime: static
+    region: oregon
+    buildCommand: "cd frontend && npm install && npm run build"
+    staticPublishPath: "./frontend/dist"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

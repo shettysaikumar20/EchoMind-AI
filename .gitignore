@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+backend/venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+.dist/
+
+# Databases & local data
+*.db
+*.sqlite3
+echomind.db
+
+# Environment & secrets
+.env
+.env.local
+*.pem
+*.key
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
