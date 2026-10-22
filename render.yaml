@@ -1,5 +1,6 @@
+
 services:
-  # EchoMind AI FastAPI Backend with WebSockets
+  # EchoMind AI FastAPI Backend
   - type: web
     name: echomind-ai-backend
     runtime: python
@@ -23,11 +24,10 @@ services:
       - key: SECRET_KEY
         generateValue: true
 
-  # EchoMind AI Vite React Frontend
+  # EchoMind AI React Frontend
   - type: web
     name: echomind-ai-frontend
     runtime: static
-    region: oregon
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: "./frontend/dist"
     routes:
