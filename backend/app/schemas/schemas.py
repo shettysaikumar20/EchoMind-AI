@@ -54,9 +54,15 @@ class TranscriptSegmentResponse(BaseModel):
 
 # --- Question & Answer Schemas ---
 class QuestionItem(BaseModel):
+    id: Optional[str] = Field(None, description="Database unique identifier if persisted")
     question_text: str = Field(..., description="Preserved wording of the detected question")
     context_snippet: Optional[str] = Field(None, description="Relevant surrounding context from conversation")
     question_index: int = Field(1, description="Sequential number of the question")
+
+
+class QuestionCreate(BaseModel):
+    question_text: str = Field(..., description="Wording of question to add")
+    context_snippet: Optional[str] = Field(None, description="Context from speech or notes")
 
 
 class QuestionDetectionResult(BaseModel):

@@ -35,9 +35,13 @@ app = FastAPI(
 )
 
 # CORS Middleware
+origins = list(settings.CORS_ORIGINS)
+if "*" not in origins:
+    origins.extend(["http://localhost:5173", "http://127.0.0.1:5173"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Production config allows origins or *
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

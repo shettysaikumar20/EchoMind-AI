@@ -53,14 +53,25 @@ def list_sessions(
         )
     sessions = query.order_by(SessionModel.updated_at.desc()).all()
 
-    # Enrich with counts
+    # Enrich with counts and duration
     result = []
     for s in sessions:
         q_count = db.query(func.count(DetectedQuestion.id)).filter(DetectedQuestion.session_id == s.id).scalar() or 0
         a_count = db.query(func.count(AIAnswer.id)).filter(AIAnswer.session_id == s.id).scalar() or 0
+        
+        duration = float(s.duration_seconds or 0.0)
+        if duration == 0.0:
+            max_end = db.query(func.max(TranscriptSegment.end_time)).filter(
+                TranscriptSegment.session_id == s.id,
+                TranscriptSegment.end_time < 100000
+            ).scalar()
+            if max_end:
+                duration = round(float(max_end), 1)
+
         resp = SessionResponse.model_validate(s)
         resp.question_count = q_count
         resp.answer_count = a_count
+        resp.duration_seconds = duration
         result.append(resp)
     return result
 
@@ -115,7 +126,14 @@ def get_session(
     q_count = len(questions)
     a_count = sum(len(q.answers) for q in questions_with_answers)
 
+    duration = float(session.duration_seconds or 0.0)
+    if duration == 0.0 and transcripts:
+        valid_ends = [t.end_time for t in transcripts if t.end_time and t.end_time < 100000]
+        if valid_ends:
+            duration = round(float(max(valid_ends)), 1)
+
     resp = SessionDetailResponse.model_validate(session)
+    resp.duration_seconds = duration
     resp.question_count = q_count
     resp.answer_count = a_count
     resp.transcripts = [TranscriptSegmentResponse.model_validate(t) for t in transcripts]

@@ -2,6 +2,16 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { TranscriptSegment, CaptureMode } from '../types';
 import { api } from '../services/api';
 
+export interface NetworkDiagnostics {
+  wsState: 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED';
+  wsUrl: string;
+  bytesTransmitted: number;
+  bytesReceivedByBackend: number;
+  backendRms: number;
+  lastTranscription: string;
+  lastError: string | null;
+}
+
 interface UseLiveTranscriptionProps {
   sessionId: string | null;
   captureMode: CaptureMode;
@@ -20,34 +30,97 @@ export function useLiveTranscription({
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  const [networkDiagnostics, setNetworkDiagnostics] = useState<NetworkDiagnostics>({
+    wsState: 'CLOSED',
+    wsUrl: '',
+    bytesTransmitted: 0,
+    bytesReceivedByBackend: 0,
+    backendRms: 0,
+    lastTranscription: '',
+    lastError: null,
+  });
+
   const wsRef = useRef<WebSocket | null>(null);
   const recognitionRef = useRef<any>(null);
   const segmentStartTimeRef = useRef<number>(0);
-  const timerRef = useRef<number>(0);
+  const sessionIdRef = useRef<string | null>(sessionId);
+  const isRecordingRef = useRef<boolean>(isRecording);
+  const onNewFinalSegmentRef = useRef(onNewFinalSegment);
+  const pendingChunksRef = useRef<ArrayBuffer[]>([]);
+  const bytesTransmittedRef = useRef<number>(0);
 
-  // Initialize or connect WebSocket
   useEffect(() => {
-    if (!sessionId) return;
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  useEffect(() => {
+    onNewFinalSegmentRef.current = onNewFinalSegment;
+  }, [onNewFinalSegment]);
+
+  // Connect WebSocket when sessionId is valid
+  useEffect(() => {
+    if (!sessionId) {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      setIsConnected(false);
+      setNetworkDiagnostics((prev) => ({ ...prev, wsState: 'CLOSED' }));
+      return;
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/sessions/${sessionId}/transcribe`;
+    // When running locally on Vite (port 5173), connect directly to FastAPI on port 8000
+    const wsUrl =
+      window.location.port === '5173'
+        ? `${protocol}//${window.location.hostname}:8000/ws/sessions/${sessionId}/transcribe`
+        : `${protocol}//${window.location.host}/ws/sessions/${sessionId}/transcribe`;
+
+    setNetworkDiagnostics((prev) => ({
+      ...prev,
+      wsUrl,
+      wsState: 'CONNECTING',
+      lastError: null,
+    }));
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       setIsConnected(true);
-      console.log('WebSocket connected for transcription session:', sessionId);
+      setNetworkDiagnostics((prev) => ({
+        ...prev,
+        wsState: 'OPEN',
+        lastError: null,
+      }));
+
+      // Flush any queued audio chunks
+      while (pendingChunksRef.current.length > 0) {
+        const chunk = pendingChunksRef.current.shift();
+        if (chunk && ws.readyState === WebSocket.OPEN) {
+          ws.send(chunk);
+        }
+      }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setIsConnected(false);
-      console.log('WebSocket disconnected');
+      setNetworkDiagnostics((prev) => ({
+        ...prev,
+        wsState: 'CLOSED',
+        lastError: event.reason || (event.wasClean ? null : 'WebSocket connection closed unexpectedly'),
+      }));
     };
 
     ws.onerror = (err) => {
-      console.warn('WebSocket error:', err);
+      setNetworkDiagnostics((prev) => ({
+        ...prev,
+        lastError: 'WebSocket network error. Check backend server on port 8000.',
+      }));
     };
 
     ws.onmessage = (event) => {
@@ -65,30 +138,49 @@ export function useLiveTranscription({
             created_at: data.created_at,
           };
           setTranscripts((prev) => {
-            // Avoid duplicate by ID
             if (prev.some((p) => p.id === newSeg.id)) return prev;
+            const last = prev[prev.length - 1];
+            if (last && last.text.trim().toLowerCase() === newSeg.text.trim().toLowerCase()) {
+              return prev;
+            }
             return [...prev, newSeg];
           });
-          onNewFinalSegment?.(newSeg);
+          setNetworkDiagnostics((prev) => ({
+            ...prev,
+            lastTranscription: data.text || prev.lastTranscription,
+          }));
+          onNewFinalSegmentRef.current?.(newSeg);
+        } else if (data.type === 'audio_telemetry') {
+          setNetworkDiagnostics((prev) => ({
+            ...prev,
+            backendRms: data.rms ?? 0,
+            bytesReceivedByBackend: data.bytes_received ?? prev.bytesReceivedByBackend,
+          }));
+        } else if (data.type === 'error') {
+          setNetworkDiagnostics((prev) => ({
+            ...prev,
+            lastError: data.message || 'Backend transcription error',
+          }));
         }
-      } catch (e) {
+      } catch (e: any) {
         console.warn('Error parsing WS message:', e);
       }
     };
 
     return () => {
       ws.close();
-      wsRef.current = null;
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+      }
     };
-  }, [sessionId, onNewFinalSegment]);
+  }, [sessionId]);
 
-  // Setup Web Speech API continuous recognition
+  // Setup Web Speech API continuous recognition (client-side speech assist)
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      console.info('Web Speech API is not supported in this browser. Falling back to server-side audio ingestion.');
       return;
     }
 
@@ -104,20 +196,38 @@ export function useLiveTranscription({
         const transcriptPart = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           const finalText = transcriptPart.trim();
-          if (finalText && sessionId) {
+          const targetSessionId = sessionIdRef.current;
+          if (finalText && targetSessionId) {
             const start = segmentStartTimeRef.current;
             const end = start + 2.5;
             segmentStartTimeRef.current = end;
 
-            const segmentPayload = {
+            const tempId = `seg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+            const segmentPayload: TranscriptSegment = {
+              id: tempId,
+              session_id: targetSessionId,
               source: captureMode === 'dual' ? 'combined' : captureMode,
               text: finalText,
               is_final: true,
               start_time: start,
               end_time: end,
+              created_at: new Date().toISOString(),
             };
 
-            // Send via WebSocket if connected
+            setTranscripts((prev) => {
+              if (prev.some((p) => p.text.trim().toLowerCase() === finalText.toLowerCase())) {
+                return prev;
+              }
+              return [...prev, segmentPayload];
+            });
+            onNewFinalSegmentRef.current?.(segmentPayload);
+
+            setNetworkDiagnostics((prev) => ({
+              ...prev,
+              lastTranscription: finalText,
+            }));
+
+            // Persist to backend via WebSocket or REST
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
               wsRef.current.send(
                 JSON.stringify({
@@ -126,11 +236,11 @@ export function useLiveTranscription({
                 })
               );
             } else {
-              // Fallback to REST API
-              api.appendTranscript(sessionId, segmentPayload).then((saved) => {
-                setTranscripts((prev) => [...prev, saved]);
-                onNewFinalSegment?.(saved);
-              });
+              api.appendTranscript(targetSessionId, segmentPayload).then((saved) => {
+                setTranscripts((prev) =>
+                  prev.map((s) => (s.id === tempId ? saved : s))
+                );
+              }).catch(console.warn);
             }
           }
         } else {
@@ -142,24 +252,26 @@ export function useLiveTranscription({
     };
 
     recognition.onerror = (event: any) => {
-      // Ignore 'no-speech' or 'aborted' normal events
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        console.warn('Speech recognition error:', event.error);
+        console.warn('Speech recognition status:', event.error);
       }
     };
 
     recognition.onend = () => {
-      // Auto-restart if we are still actively recording
-      if (isRecording && recognitionRef.current) {
+      if (isRecordingRef.current && recognitionRef.current) {
         try {
-          recognition.start();
-        } catch {
-          // already started
-        }
+          recognitionRef.current.start();
+        } catch {}
       }
     };
 
     recognitionRef.current = recognition;
+
+    if (isRecordingRef.current) {
+      try {
+        recognition.start();
+      } catch {}
+    }
 
     return () => {
       try {
@@ -167,7 +279,7 @@ export function useLiveTranscription({
       } catch {}
       recognitionRef.current = null;
     };
-  }, [sessionId, captureMode, isRecording, onNewFinalSegment]);
+  }, [captureMode]);
 
   // Start / Stop speech recognition based on isRecording
   useEffect(() => {
@@ -192,6 +304,37 @@ export function useLiveTranscription({
     );
   }, []);
 
+  // Send audio chunk to backend via WebSocket for real faster-whisper STT
+  const sendAudioChunk = useCallback((buffer: ArrayBuffer) => {
+    bytesTransmittedRef.current += buffer.byteLength;
+    setNetworkDiagnostics((prev) => ({
+      ...prev,
+      bytesTransmitted: bytesTransmittedRef.current,
+    }));
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(buffer);
+      } catch (e: any) {
+        setNetworkDiagnostics((prev) => ({ ...prev, lastError: e.message }));
+      }
+    } else if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+      if (pendingChunksRef.current.length < 50) {
+        pendingChunksRef.current.push(buffer);
+      }
+    }
+  }, []);
+
+  const flushAudio = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({ type: 'flush' }));
+      } catch (e: any) {
+        setNetworkDiagnostics((prev) => ({ ...prev, lastError: e.message }));
+      }
+    }
+  }, []);
+
   // Filtered transcripts by search query
   const filteredTranscripts = transcripts.filter((t) =>
     t.text.toLowerCase().includes(searchQuery.toLowerCase())
@@ -206,5 +349,8 @@ export function useLiveTranscription({
     setSearchQuery,
     setTranscripts,
     updateSegmentText,
+    sendAudioChunk,
+    flushAudio,
+    networkDiagnostics,
   };
 }

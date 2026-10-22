@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db
 from app.models.entities import SessionModel, TranscriptSegment, DetectedQuestion, UserSettings, User
-from app.schemas.schemas import QuestionDetectionResult, QuestionItem
+from app.schemas.schemas import QuestionDetectionResult, QuestionItem, QuestionCreate, QuestionWithAnswerResponse
 from app.api.deps import get_current_user
 from app.services.question_detector import detect_questions_from_transcript
 
@@ -57,9 +57,9 @@ async def detect_questions(
     api_key = None
     if user_settings:
         if provider == "backboard":
-            api_key = user_settings.backboard_api_key
+            api_key = user_settings.backboard_api_key.strip() if user_settings.backboard_api_key and user_settings.backboard_api_key.strip() else None
         else:
-            api_key = user_settings.openrouter_api_key
+            api_key = user_settings.openrouter_api_key.strip() if user_settings.openrouter_api_key and user_settings.openrouter_api_key.strip() else None
 
     # Run AI question detection
     detection_result = await detect_questions_from_transcript(
@@ -97,7 +97,9 @@ async def detect_questions(
                 question_index=next_idx
             )
             db.add(db_question)
+            db.flush()
             new_saved_questions.append(QuestionItem(
+                id=db_question.id,
                 question_text=clean_text,
                 context_snippet=q.context_snippet,
                 question_index=next_idx
@@ -111,4 +113,54 @@ async def detect_questions(
         questions=new_saved_questions,
         processed_segment_count=len(transcripts),
         message=f"Detected {len(new_saved_questions)} new question(s)." if new_saved_questions else "No new questions detected."
+    )
+
+
+@router.post("/{session_id}/questions", response_model=QuestionWithAnswerResponse)
+async def create_question(
+    session_id: str,
+    req: QuestionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Directly adds a new question to a session and persists it in SQLite,
+    guaranteeing it never disappears.
+    """
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    clean_text = req.question_text.strip()
+    if not clean_text:
+        raise HTTPException(status_code=400, detail="Question text cannot be empty")
+
+    max_idx = (
+        db.query(func.max(DetectedQuestion.question_index))
+        .filter(DetectedQuestion.session_id == session_id)
+        .scalar() or 0
+    )
+
+    db_question = DetectedQuestion(
+        session_id=session_id,
+        question_text=clean_text,
+        context_snippet=req.context_snippet,
+        question_index=max_idx + 1
+    )
+    db.add(db_question)
+    db.commit()
+    db.refresh(db_question)
+
+    return QuestionWithAnswerResponse(
+        id=db_question.id,
+        session_id=db_question.session_id,
+        question_text=db_question.question_text,
+        context_snippet=db_question.context_snippet,
+        question_index=db_question.question_index,
+        detected_at=db_question.detected_at,
+        answers=[]
     )

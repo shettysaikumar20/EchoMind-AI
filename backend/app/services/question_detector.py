@@ -8,22 +8,22 @@ from app.services.ai_providers import get_ai_provider
 logger = logging.getLogger("echomind.question_detector")
 
 QUESTION_SYSTEM_PROMPT = """You are an expert conversation analyst.
-Your task is to analyze conversation transcripts and identify all questions asked by the participants.
+Your task is to analyze conversation transcripts and identify all questions and technical inquiries asked by the participants.
 
 Instructions:
 1. Identify all DIRECT questions (e.g., "What is the difference between auth and authz?", "How do we scale this?")
-2. Identify all INDIRECT questions (e.g., "I wonder if we should use Redis", "Could you tell me how this works?")
-3. Extract MULTIPLE questions if more than one question was asked.
+2. Identify all INDIRECT questions and technical requests (e.g., "types of data types in Java", "tell me how this works", "I wonder if we should use Redis")
+3. Extract MULTIPLE questions if more than one topic or question was raised.
 4. PRESERVE the speaker's original wording as closely as possible.
-5. If NO question was asked, return an empty array `[]`. DO NOT invent or assume questions.
-6. Deduplicate identical or semantically identical questions in the same snippet.
+5. If NO question or inquiry was asked, return an empty array `[]`. DO NOT invent unrelated questions.
+6. Deduplicate identical questions in the same snippet.
 7. Provide a concise `context_snippet` (1-2 sentences) showing why or where the question arose.
 
 You MUST respond strictly with valid JSON conforming to this format:
 {
   "questions": [
     {
-      "question_text": "Exact text of the question?",
+      "question_text": "Exact text of the question or inquiry?",
       "context_snippet": "Relevant context or preceding sentence.",
       "question_index": 1
     }
@@ -47,7 +47,8 @@ def heuristic_question_extractor(transcript_text: str) -> List[QuestionItem]:
         "what", "why", "how", "when", "where", "who", "which", "whose", "whom",
         "can", "could", "would", "should", "is", "are", "do", "does", "did",
         "has", "have", "had", "will", "shall", "may", "might", "wondering if",
-        "tell me", "explain"
+        "tell me", "explain", "describe", "give me", "show me", "list", "types of",
+        "difference between", "the types of", "the main types"
     )
 
     idx = 1
@@ -122,11 +123,19 @@ async def detect_questions_from_transcript(
 
             data = json.loads(cleaned_response)
             questions_data = data.get("questions", [])
-            parsed_questions = [QuestionItem(**q) for q in questions_data]
+            seen_ai = set()
+            deduped_questions = []
+            for q in questions_data:
+                item = QuestionItem(**q)
+                norm = item.question_text.lower().strip().rstrip("?")
+                if norm not in seen_ai:
+                    seen_ai.add(norm)
+                    item.question_index = len(deduped_questions) + 1
+                    deduped_questions.append(item)
             
             return QuestionDetectionResult(
-                questions=parsed_questions,
-                processed_segment_count=len(parsed_questions),
+                questions=deduped_questions,
+                processed_segment_count=len(deduped_questions),
                 message="Questions detected via open-weight AI model"
             )
         except Exception as e:

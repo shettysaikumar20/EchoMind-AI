@@ -99,6 +99,13 @@ export const api = {
     );
   },
 
+  async addQuestion(sessionId: string, payload: { question_text: string; context_snippet?: string }): Promise<DetectedQuestion> {
+    return request<DetectedQuestion>(`/sessions/${sessionId}/questions`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   async continueSession(sessionId: string): Promise<Session> {
     return request<Session>(`/sessions/${sessionId}/continue`, {
       method: 'POST',
@@ -189,6 +196,26 @@ export const api = {
     } catch (e: any) {
       callbacks.onError(e.message || 'Stream connection error');
     }
+  },
+
+  async streamAnswer(
+    sessionId: string,
+    payload: {
+      session_id?: string;
+      question_id?: string;
+      question_text: string;
+      context?: string;
+      provider?: string;
+      model?: string;
+      answer_length?: string;
+    },
+    callbacks: {
+      onToken: (token: string) => void;
+      onComplete: (metadata: { answer_id?: string; latency_ms?: number }) => void;
+      onError: (err: string) => void;
+    }
+  ): Promise<void> {
+    return api.generateAnswerStream(sessionId, payload, callbacks);
   },
 
   // --- Settings ---

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { TranscriptSegment } from '../types';
-import { Search, Edit2, Check, X, Mic, MonitorUp, Layers } from 'lucide-react';
+import { Search, Edit2, Check, X, Mic, MonitorUp, Layers, Sparkles } from 'lucide-react';
 
 interface TranscriptFeedProps {
   transcripts: TranscriptSegment[];
@@ -8,6 +8,7 @@ interface TranscriptFeedProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onUpdateSegment?: (id: string, text: string) => void;
+  onAskAiFromSegment?: (text: string) => void;
 }
 
 export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
@@ -16,15 +17,29 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   searchQuery,
   onSearchChange,
   onUpdateSegment,
+  onAskAiFromSegment,
 }) => {
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const isAutoScrollEnabledRef = useRef<boolean>(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>('');
 
-  // Auto-scroll to bottom on new transcripts
+  // Auto-scroll ONLY inside the transcript box, NEVER scroll the window or page!
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    // Check if user is near bottom
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (isAtBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [transcripts, interimText]);
+
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    isAutoScrollEnabledRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   const handleStartEdit = (seg: TranscriptSegment) => {
     setEditingId(seg.id);
@@ -39,6 +54,11 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
   };
 
   const formatSec = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || seconds < 0) return '00:00';
+    if (seconds > 100000) {
+      const d = new Date(seconds > 1e11 ? seconds : seconds * 1000);
+      return d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -76,7 +96,11 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
       </div>
 
       {/* Transcript Segments List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[220px] max-h-[380px]">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[220px] max-h-[380px]"
+      >
         {transcripts.length === 0 && !interimText ? (
           <div className="flex flex-col items-center justify-center h-48 text-center text-slate-400">
             <Mic className="w-8 h-8 text-slate-600 mb-2 animate-bounce" />
@@ -129,15 +153,27 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
                   )}
                 </div>
 
-                {/* Inline Edit Trigger */}
+                {/* Actions: Inline Edit & Ask AI */}
                 {!isEditing && (
-                  <button
-                    onClick={() => handleStartEdit(seg)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
-                    title="Correct transcript segment"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {onAskAiFromSegment && (
+                      <button
+                        onClick={() => onAskAiFromSegment(seg.text)}
+                        className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded cursor-pointer transition-colors"
+                        title="Turn this spoken sentence into a question and get an AI answer"
+                      >
+                        <Sparkles className="w-2.5 h-2.5" />
+                        <span>Ask AI</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleStartEdit(seg)}
+                      className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 cursor-pointer"
+                      title="Correct transcript segment"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -153,8 +189,6 @@ export const TranscriptFeed: React.FC<TranscriptFeedProps> = ({
             <span>{interimText}</span>
           </div>
         )}
-
-        <div ref={bottomRef} />
       </div>
     </div>
   );

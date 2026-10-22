@@ -82,7 +82,7 @@ class BaseAIProvider:
 
 class OpenRouterProvider(BaseAIProvider):
     def __init__(self, api_key: Optional[str] = None):
-        key = api_key or settings.OPENROUTER_API_KEY
+        key = api_key if api_key is not None else settings.OPENROUTER_API_KEY
         super().__init__(key, settings.OPENROUTER_API_BASE)
 
     def _get_headers(self) -> Dict[str, str]:
@@ -180,7 +180,7 @@ class OpenRouterProvider(BaseAIProvider):
 
 class BackboardAIProvider(BaseAIProvider):
     def __init__(self, api_key: Optional[str] = None):
-        key = api_key or settings.BACKBOARD_API_KEY
+        key = api_key if api_key is not None else settings.BACKBOARD_API_KEY
         super().__init__(key, settings.BACKBOARD_API_BASE)
 
     def _get_headers(self) -> Dict[str, str]:
@@ -189,29 +189,47 @@ class BackboardAIProvider(BaseAIProvider):
             "User-Agent": "EchoMind-AI/1.0",
         }
         if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["X-API-Key"] = self.api_key
         return headers
+
+    def _format_content_and_system(self, messages: List[Dict[str, str]]) -> tuple[str, Optional[str]]:
+        system_prompts = []
+        user_parts = []
+        for m in messages:
+            role = m.get("role", "")
+            content = m.get("content", "")
+            if role == "system":
+                system_prompts.append(content)
+            elif role == "user":
+                user_parts.append(content)
+            elif role == "assistant":
+                user_parts.append(f"[Assistant previously replied]: {content}")
+        
+        system_prompt = "\n\n".join(system_prompts) if system_prompts else None
+        main_content = "\n\n".join(user_parts) if user_parts else (system_prompt or "Hello")
+        return main_content, system_prompt
 
     async def generate_chat_completion(
         self,
         messages: List[Dict[str, str]],
-        model: str = "backboard/llama-3.1-8b",
+        model: str = "meta-llama/llama-3.1-8b-instruct",
         temperature: float = 0.2,
         max_tokens: int = 1000
     ) -> str:
         if not self.api_key:
             raise ValueError("Backboard AI API key is missing. Please configure BACKBOARD_API_KEY in Settings or .env.")
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
+        content, system_prompt = self._format_content_and_system(messages)
+        payload: Dict[str, Any] = {
+            "content": content,
+            "stream": False,
         }
+        if system_prompt:
+            payload["system_prompt"] = system_prompt
 
         async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
-                f"{self.api_base}/chat/completions",
+                f"{self.api_base}/threads/messages",
                 headers=self._get_headers(),
                 json=payload
             )
@@ -220,12 +238,12 @@ class BackboardAIProvider(BaseAIProvider):
                 raise RuntimeError(f"Backboard API returned HTTP {resp.status_code}: {resp.text}")
 
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            return data.get("content", "")
 
     async def stream_chat_completion(
         self,
         messages: List[Dict[str, str]],
-        model: str = "backboard/llama-3.1-8b",
+        model: str = "meta-llama/llama-3.1-8b-instruct",
         temperature: float = 0.2,
         max_tokens: int = 1500
     ) -> AsyncGenerator[str, None]:
@@ -233,18 +251,18 @@ class BackboardAIProvider(BaseAIProvider):
             yield "⚠️ Configuration Notice: Backboard AI API key is missing. Please configure your BACKBOARD_API_KEY in Settings or your backend .env file to enable live Backboard AI streaming."
             return
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
+        content, system_prompt = self._format_content_and_system(messages)
+        payload: Dict[str, Any] = {
+            "content": content,
             "stream": True,
         }
+        if system_prompt:
+            payload["system_prompt"] = system_prompt
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
                 "POST",
-                f"{self.api_base}/chat/completions",
+                f"{self.api_base}/threads/messages",
                 headers=self._get_headers(),
                 json=payload
             ) as response:
@@ -259,15 +277,21 @@ class BackboardAIProvider(BaseAIProvider):
                         continue
                     line = line.strip()
                     if line.startswith("data: "):
-                        data_str = line[6:]
-                        if data_str == "[DONE]":
-                            break
+                        data_str = line[6:].strip()
+                        if not data_str:
+                            continue
                         try:
                             parsed = json.loads(data_str)
-                            delta = parsed.get("choices", [{}])[0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                yield content
+                            event_type = parsed.get("type")
+                            if event_type == "content_streaming":
+                                chunk = parsed.get("content", "")
+                                if chunk:
+                                    yield chunk
+                            elif event_type == "run_completed":
+                                break
+                            elif event_type == "run_failed":
+                                yield f"\n[Backboard Error: {parsed.get('error', 'Execution failed')}]"
+                                break
                         except Exception:
                             continue
 

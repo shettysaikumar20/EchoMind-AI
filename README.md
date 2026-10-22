@@ -1,80 +1,157 @@
 # EchoMind AI 🎙️🧠
 
-> **Tagline:** Listen. Understand. Answer. Remember.  
-> **Hacktoberfest 2026 Week 3 Challenge:** *Slow and Steady — Let AI do the work so humans don't have to.*
+> **Listen. Understand. Answer. Remember.**  
+> *Real-time conversational intelligence with multi-source audio capture, sub-second transcription, automated question extraction, and open-weight Llama model answers.*
 
+[![Hacktoberfest 2026](https://img.shields.io/badge/Hacktoberfest-2026%20Week%203-FF7843?logo=hacktoberfest&logoColor=white)](https://hacktoberfest.com)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.13-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
 [![Tests](https://img.shields.io/badge/Tests-15%20Passing-10B981?logo=pytest&logoColor=white)](https://pytest.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-EchoMind AI is a production-oriented real-time AI conversation assistant. It captures microphone and browser-tab audio simultaneously, transcribes speech continuously with sub-second latency, automatically detects asked questions, and generates immediate context-grounded AI answers powered by open-weight language models with permanent conversation memory.
+---
+
+## 🎃 Hacktoberfest 2026: Week 3 — Slow and Steady
+
+**Challenge Ethos:** *"Let AI do the work so humans don't have to."*
+
+EchoMind AI was built specifically to tackle cognitive fatigue in high-stress meetings, lectures, interviews, and webinars:
+- **Zero Cognitive Overhead:** While you focus on the conversation, EchoMind listens in the background, extracts questions on-the-fly, and prepares synthesized, grounded answers before you even finish formulating your thoughts.
+- **Autonomous Workflow:** No manual note-taking, no transcribing recordings afterward, and no juggling multiple windows.
+- **Open-Weight Autonomy:** Powered by accessible, auditable, open-weight models (`meta-llama/llama-3.1-8b-instruct`), freeing users from proprietary vendor lock-in.
 
 ---
 
 ## 🌟 Core Features
 
 - **Multi-Source Audio Capture (Web Audio API):**
-  - **Mode A (Microphone Only):** Direct input via `getUserMedia()`.
-  - **Mode B (Browser Tab / Media Audio):** Capture system webinars, video calls, or videos via `getDisplayMedia()`.
-  - **Mode C (Microphone + Tab Audio):** Real-time dual-source mixing using `AudioContext`, `createMediaStreamSource`, and `createMediaStreamDestination` without acoustic feedback.
-- **Continuous Live Transcription:** Real-time speech stream synchronized over WebSockets (`/ws/sessions/{id}/transcribe`) with timestamps and source labeling (`[MIC]`, `[TAB]`, `[COMBINED]`).
-- **Intelligent Question Detection:** Automatic identification of direct, indirect, and multi-part questions triggered on **Pause** using open-weight models or local heuristic deduction.
-- **Context-Aware Streaming Answers:** Immediate token-streamed answers utilizing full conversation history and transcript memory.
-- **Provider Flexibility:**
-  - **OpenRouter:** Fast streaming across Meta Llama 3.1 (8B & 70B), Google Gemma 2 (9B), and Mistral 7B.
-  - **Backboard AI:** Enterprise-grade hosted open-weight instances.
-- **Permanent Conversation Memory:**
-  - Conversations survive page refreshes, browser restarts, and server reboots.
-  - One-click session continuation without creating duplicate records.
-  - Export full sessions to clean **Markdown (.md)** or structured **JSON**.
-- **Data Privacy & Governance:** Ephemeral audio processing without storing raw audio recordings indefinitely; user data strictly isolated.
+  - **Mode A (Microphone Only):** Direct input via `navigator.mediaDevices.getUserMedia()`.
+  - **Mode B (Browser Tab Audio):** In-meeting audio capture from Google Meet, Zoom Web, YouTube, or webinars via `getDisplayMedia()`.
+  - **Mode C (Microphone + Tab Audio):** Real-time dual-source mixing using `AudioContext`, `createMediaStreamSource`, and `createMediaStreamDestination` without feedback loops.
+- **Real-Time Audio Diagnostics & Preview:**
+  - Built-in hardware inspector testing permissions, sample rates, active audio channels, and live RMS input volume before recording starts.
+- **Continuous Live Transcription:**
+  - Streaming audio sent over WebSockets (`/ws/sessions/{id}/transcribe`) with clean, timestamped speaker attribution (`[MIC]`, `[TAB]`, `[COMBINED]`).
+- **Autonomous Question Detection:**
+  - Intelligent background parsing for direct, rhetorical, and multi-part questions triggered naturally during conversational pauses.
+- **Context-Aware Streaming Answers:**
+  - Answers are dynamically grounded in previous transcript history and streamed token-by-token directly to markdown cards.
+- **Multi-Question Management & "Answer All":**
+  - Grouped questions with individual action triggers, inline manual questions, and one-click bulk generation.
+- **Rich Markdown Formatting:**
+  - Clean rendering for tables, lists, comparisons, and technical answers without unparsed syntax clutter.
+- **Persistent Memory & Session History:**
+  - Survives browser refreshes, disconnects, and server reboots. Sessions can be resumed seamlessly or exported to structured **Markdown** or **JSON**.
 
 ---
 
-## 🛠️ Technology Stack
+## 🏗️ Architecture & Technology Stack
+
+```
++-----------------------------------------------------------------------------------+
+|                                  CLIENT (BROWSER)                                 |
+|                                                                                   |
+|  [ Microphone (getUserMedia) ]         [ Tab Audio (getDisplayMedia) ]            |
+|               \                                       /                           |
+|                +------> [ Web Audio API Mixer ] <----+                            |
+|                                   |                                               |
+|                    [ AudioWorklet / ScriptProcessor ]                             |
+|                                   |                                               |
+|               +-------------------+-------------------+                           |
+|               | (PCM / Audio Chunks)                  | (Live Diagnostics)        |
+|               v                                       v                           |
+|       [ WebSocket Client ]                [ Waveform & RMS Visualizer ]           |
++---------------+---------------------------------------+---------------------------+
+                |
+                | ws://localhost:8000/ws/sessions/{id}/transcribe
+                v
++---------------+-------------------------------------------------------------------+
+|                             BACKEND (FASTAPI / PYTHON)                            |
+|                                                                                   |
+|      [ WebSocket Router ] <-------------------+                                   |
+|               |                               |                                   |
+|               v                               | (Continuous Transcripts)          |
+|      [ Audio Ingestion & STT ]                |                                   |
+|      (Lightweight / Faster-Whisper)           |                                   |
+|               |                               |                                   |
+|               v                               |                                   |
+|      [ Question Detector ] -------------------+                                   |
+|               |                                                                   |
+|               | (Extracted Questions)                                             |
+|               v                                                                   |
+|      [ Open-Weight AI Provider ] <-----> [ OpenRouter / Backboard AI API ]        |
+|      (Meta Llama 3.1 8B Instruct)                                                 |
+|               |                                                                   |
+|               v                                                                   |
+|      [ SQLAlchemy 2.0 ORM ] ----------> [ SQLite / PostgreSQL Database ]          |
++-----------------------------------------------------------------------------------+
+```
+
+### Technology Matrix
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4, Lucide React, Framer Motion, TanStack Query, React Router |
-| **Backend** | Python 3.11+, FastAPI, WebSockets, Pydantic v2, SQLAlchemy 2.0, Alembic, HTTPX |
-| **Database** | SQLite (development fallback), PostgreSQL / Supabase (production) |
-| **AI Providers** | OpenRouter API & Backboard AI API (Meta Llama 3.1, Google Gemma 2, Mistral) |
-| **Audio Processing** | Web Audio API, MediaStreams, AnalyserNode, ScriptProcessor, VAD RMS computation |
-| **Deployment** | Render (`render.yaml`), Multi-Stage Dockerfile |
+| **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS v4, Lucide Icons, React Markdown |
+| **Backend** | Python 3.11+, FastAPI, WebSockets, Pydantic v2, SQLAlchemy 2.0, Alembic |
+| **Database** | SQLite (development), PostgreSQL / Supabase (production) |
+| **Audio Processing** | Web Audio API, MediaStreams, AnalyserNode, AudioWorklet, VAD RMS detection |
+| **Inference Models** | Meta Llama 3.1 8B Instruct (`meta-llama/llama-3.1-8b-instruct`), Gemma 2, Mistral |
+| **Providers** | OpenRouter API, Backboard AI |
 
 ---
 
-## 📐 Audio Capture Pipeline
+## 🦙 Open-Weight Llama Model Integration
 
-```
-[ Microphone (getUserMedia) ] ----\
-                                  +--> [ Web Audio API Mixer ] ---> [ AnalyserNode & RMS VAD ] ---> [ WebSocket Stream ]
-[ Browser Tab (getDisplayMedia) ] -/                                                                          |
-                                                                                                              v
-[ Live UI Waveform & Transcripts ] <--- [ Saved DB Segments ] <--- [ Continuous Speech Recognition ] <--------+
-```
+EchoMind AI is engineered around open-weight architectures, prioritizing **Meta Llama 3.1 8B Instruct**:
 
-### Browser Tab Audio Sharing Guidance
-When selecting **Mode B** or **Mode C** in Chrome or Microsoft Edge:
-1. When prompted by the browser sharing dialog, select the **Chrome/Edge Tab** tab.
-2. Ensure the checkbox labeled **"Share tab audio"** in the lower left corner is checked.
-3. EchoMind AI will automatically capture and mix the audio. If tab sharing is stopped by the user, the app gracefully pauses and releases hardware resources.
+1. **Prompt Grounding with Conversation Memory:**  
+   When a question is flagged, the backend compiles the surrounding transcript lines, session metadata, and conversation history into a structured prompt, providing high-fidelity contextual answers.
+2. **Deterministic & Fast Token Streaming:**  
+   Responses stream via server-sent chunks directly into the UI, ensuring users see the first token in under 400ms.
+3. **Flexible Inference Providers:**  
+   Easily toggle between **OpenRouter** and **Backboard AI** or point the base URL to a local **Ollama** / **vLLM** endpoint without changing frontend code.
 
 ---
 
-## 🚀 Quick Start (Local Development)
+## 🚀 Local Installation & Setup
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+ and npm
+### Option A — 1-Click Launch (Windows)
 
-### 1. Clone & Set Up Backend
+The easiest way to start EchoMind AI on Windows:
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/shettysaikumar20/EchoMind-AI.git
+   cd EchoMind-AI
+   ```
+2. **Configure your environment:**
+   ```bash
+   copy .env.example .env
+   copy backend\.env.example backend\.env
+   ```
+   *Edit `backend/.env` with your API keys (e.g. OpenRouter).*
+3. **Launch the application:**
+   Double-click `run_echomind.bat` (or execute it from PowerShell/CMD):
+   ```cmd
+   .\run_echomind.bat
+   ```
+   *This script sets up Python virtual environments, installs requirements, installs npm modules, runs migrations, and launches both backend (`http://localhost:8000`) and frontend (`http://localhost:5173`).*
+4. **To stop both services:**
+   ```cmd
+   .\stop_echomind.bat
+   ```
+
+---
+
+### Option B — Manual Cross-Platform Setup
+
+#### 1. Backend Setup (FastAPI)
 
 ```bash
-# Navigate to backend directory
+# Navigate to backend
 cd backend
 
 # Create virtual environment
@@ -83,101 +160,127 @@ python -m venv venv
 # Activate virtual environment
 # Windows:
 .\venv\Scripts\activate
-# Linux/macOS:
+# Linux / macOS:
 source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Create .env from template
+# Copy configuration
 cp .env.example .env
 
-# Run FastAPI backend server (Port 8000)
+# Run database migrations
+alembic upgrade head
+
+# Start FastAPI server
 uvicorn app.main:app --reload --port 8000
 ```
-Backend will be live at `http://localhost:8000` with interactive Swagger docs at `http://localhost:8000/docs`.
+*Backend runs at `http://localhost:8000` with interactive API docs at `http://localhost:8000/docs`.*
 
-### 2. Set Up Frontend
+#### 2. Frontend Setup (React + Vite)
 
 ```bash
-# In another terminal window:
+# In a new terminal window, navigate to frontend
 cd frontend
 
-# Install packages
+# Install dependencies
 npm install
 
-# Start Vite development server with proxy to backend
+# Start Vite dev server
 npm run dev
 ```
-Frontend will be live at `http://localhost:5173`.
+*Frontend runs at `http://localhost:5173` with automatic API and WebSocket proxying.*
 
 ---
 
-## 🧪 Automated Testing
+### Option C — Docker Unified Deployment
 
-### Backend Unit & Integration Tests (15 Passing Tests)
-Run the full test suite covering audio modes, question extraction, state machines, isolation, and session recovery:
+```bash
+# Build the Docker image
+docker build -t echomind-ai .
+
+# Run container with your API key
+docker run -p 8000:8000 -e OPENROUTER_API_KEY="your-key-here" echomind-ai
+```
+
+---
+
+## ⚙️ Environment Variable Configuration
+
+Configure these variables in your root `.env` or `backend/.env`:
+
+| Variable | Required | Default | Description |
+|---|:---:|---|---|
+| `PROJECT_NAME` | No | `"EchoMind AI"` | Application title |
+| `OPENROUTER_API_KEY` | Optional* | `""` | OpenRouter API Key for Llama 3.1 streaming |
+| `BACKBOARD_API_KEY` | Optional* | `""` | Backboard AI API Key (alternative provider) |
+| `AI_PROVIDER` | No | `"openrouter"` | Active provider: `openrouter` or `backboard` |
+| `AI_MODEL` | No | `"meta-llama/llama-3.1-8b-instruct"` | Model identifier |
+| `DATABASE_URL` | No | `"sqlite:///./echomind.db"` | Database connection string (SQLite or PostgreSQL) |
+| `SECRET_KEY` | **Yes** (Prod) | `"dev-secret-key-..."` | 32+ character key for JWT token signing |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `10080` (7 days) | JWT session expiration in minutes |
+| `STT_MODE` | No | `"lightweight"` | STT pipeline: `lightweight`, `demo`, or `faster-whisper` |
+
+*\*Note: Either `OPENROUTER_API_KEY` or `BACKBOARD_API_KEY` is required for live AI responses. If omitted, the application runs in diagnostic mode and provides guidance on configuring keys.*
+
+---
+
+## 📸 Screenshots & UI Showcase
+
+| Live Workspace & Real-Time Transcripts | Audio Diagnostic & Preview Panel |
+|:---:|:---:|
+| Dual-source audio mixing with live RMS waveform and instant transcription feed. | Hardware inspector checking mic permissions, sample rate, and active levels. |
+
+| Detected Questions & Streaming AI Answers | Session History & Markdown Export |
+|:---:|:---:|
+| Grouped question cards with markdown tables, bullet points, and single-click answer generation. | Chronological searchable archives with duration analytics and export options. |
+
+*(Screenshots can be added to `frontend/src/assets/` and linked directly in the documentation).*
+
+---
+
+## ⚠️ Known Limitations & Troubleshooting
+
+### 1. Browser Microphone & Audio Capture Considerations
+- **Autoplay / AudioContext Policies:** Modern browsers (Chrome, Edge, Safari) prohibit audio processing until the user performs an explicit gesture on the page. EchoMind AI activates the `AudioContext` on user interaction (e.g., clicking "Start Session" or "Audio Preview").
+- **HTTPS / Localhost Requirement:** Web Audio API and `navigator.mediaDevices.getUserMedia()` are strictly restricted to secure contexts (`https://` or `http://localhost`). Access will be denied over unencrypted LAN IP addresses (`http://192.168.x.x`).
+- **Sample Rate Mismatches:** Certain USB microphones or Bluetooth headsets default to 48kHz or 44.1kHz. EchoMind AI's internal resampler normalizes audio to 16kHz for speech processing, but Bluetooth headsets in "Hands-Free AG Audio" mode may reduce microphone fidelity.
+
+### 2. Browser Tab Audio Sharing Restrictions
+- **Tab Sharing Support:** Capture of tab audio via `getDisplayMedia()` is fully supported in Chromium browsers (Google Chrome, Microsoft Edge, Brave).
+- **"Share tab audio" Checkbox:** When selecting a browser tab, you **must check the "Share tab audio" checkbox** in the bottom-left corner of the browser's screen picker modal.
+- **Platform Limitations:** macOS and Linux do not permit capturing entire desktop system audio directly via standard Web APIs without third-party virtual audio loopback cables; always choose **Tab Audio** instead of "Entire Screen" for webinar capture.
+
+---
+
+## 🔒 Privacy & Consent Considerations
+
+- **Ephemeral Audio Ingestion:** EchoMind AI does not save raw `.wav` or `.mp3` audio files to disk. Audio chunks are converted into spectrograms and text in memory, then discarded immediately after transcription.
+- **Two-Party Consent Compliance:** When recording or transcribing conversations, webinars, or interviews, always ensure you have informed consent from all participants in accordance with local wiretapping and privacy regulations.
+- **Local Data Sovereignty:** All transcript records, extracted questions, and answer histories are stored in your own local database (`echomind.db`) or private cloud database. No meeting logs are shared with external parties.
+
+---
+
+## 🧪 Running Automated Tests
+
+EchoMind AI includes an automated test suite validating the entire state machine and API surface:
 
 ```bash
 cd backend
 .\venv\Scripts\pytest.exe -v
 ```
 
-Test suite validates:
-1. `test_audio_mode_a_mic` — Mode A microphone capture session setup.
-2. `test_audio_mode_b_tab` — Mode B browser tab audio permissions and state.
-3. `test_audio_mode_c_dual` — Mode C dual-source Web Audio mixing.
-4. `test_session_recovery_after_refresh` — Resuming interrupted sessions without duplicates.
-5. `test_delete_session_cascading` — Clean deletion of transcripts, questions, and answers.
-6. `test_health_endpoint` — Health check and database connectivity.
-7. `test_session_lifecycle` — Complete IDLE -> RECORDING -> PAUSED -> RESUME -> STOPPED state machine.
-8. `test_multiple_question_extraction` — Extraction of multiple and indirect questions from transcripts.
-9. `test_no_question_transcripts` — Verifying no questions are hallucinated in normal conversations.
-10. `test_openrouter_missing_credentials` & `test_backboard_missing_credentials` — Graceful error reporting for missing API keys.
-11. `test_answer_generation` — AI answers with contextual grounding.
-12. `test_user_data_isolation` — Strict multi-tenant session boundary enforcement.
-13. `test_session_export` — Markdown and JSON export endpoints.
-
-### Frontend Production Build
-```bash
-cd frontend
-npm run build
-```
+All 15 test suites cover:
+- Audio capture modes (A, B, C)
+- Multi-question extraction & noise rejection
+- Session recovery after browser refresh
+- Cascading session deletion
+- Multi-tenant data isolation
+- Markdown & JSON session exports
 
 ---
 
-## 🌐 Deploy to Render
+## 📄 License
 
-EchoMind AI includes a ready-to-deploy `render.yaml` blueprint:
-
-1. Push your repository to GitHub.
-2. In [Render Dashboard](https://dashboard.render.com), click **New +** -> **Blueprint**.
-3. Select your repository. Render will automatically detect `render.yaml` and configure:
-   - Python Web Service with WebSocket support for the FastAPI backend.
-   - Static Web Service with single-page app rewrite rules for the React frontend.
-4. Add your `OPENROUTER_API_KEY` or `BACKBOARD_API_KEY` and `DATABASE_URL` in the Render environment settings.
-
----
-
-## 🐳 Docker Deployment
-
-Build and run the entire unified stack via Docker:
-
-```bash
-docker build -t echomind-ai .
-docker run -p 8000:8000 -e OPENROUTER_API_KEY="your-key" echomind-ai
-```
-
----
-
-## 💡 Hacktoberfest 2026: Why Open-Weight AI?
-
-In adherence to the **Week 3 "Slow and Steady"** ethos:
-- **No Vendor Lock-in:** Open-weight models like Meta's Llama 3.1 and Google's Gemma 2 can be audited, fine-tuned, and hosted locally or in hybrid multi-cloud environments.
-- **Privacy Assurance:** Critical enterprise conversations and meeting audio should not be used to train external proprietary models without explicit consent.
-- **Deterministic Latency:** Open-weight architectures provide reproducible inference latency, essential for real-time question detection while audio is actively streaming.
-
----
-
-## 📜 License
-MIT License. Created for Hacktoberfest 2026.
+This project is licensed under the [MIT License](LICENSE).  
+Created with ❤️ for **Hacktoberfest 2026**.

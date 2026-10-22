@@ -23,21 +23,27 @@ def build_answer_prompt(
     answer_length: str = "concise"
 ) -> list[dict[str, str]]:
     length_guidelines = {
-        "concise": "Provide a direct, high-impact, concise answer (2-4 sentences max). Be authoritative and precise.",
-        "detailed": "Provide a comprehensive, in-depth explanation with structural rationale, examples, and nuances.",
-        "bullet_points": "Provide a clear, structured response formatted as concise bullet points with bold keywords."
+        "concise": "Deliver a direct, high-impact executive answer (2-4 sentences max). Be authoritative and precise.",
+        "detailed": "Provide a comprehensive, senior-architect-level explanation with structural clarity and practical trade-offs.",
+        "bullet_points": "Provide a clean executive summary followed by crisp, high-signal bullet points."
     }
     guideline = length_guidelines.get(answer_length, length_guidelines["concise"])
 
-    system_prompt = f"""You are EchoMind AI, an elite real-time conversation assistant built for Hacktoberfest 2026.
-Your role is to answer questions asked during live discussions, meetings, and audio streams.
+    system_prompt = f"""You are EchoMind AI, an elite conversation assistant and senior technical architect.
+Your answers must be polished, professional, and executive-ready.
 
-Instructions:
-1. {guideline}
-2. Use the provided conversation context and transcript history to formulate a grounded, context-aware answer.
-3. If the user refers to something said earlier in the conversation (e.g. "which of the two options?", "what did they say about the budget?"), leverage the transcript context directly.
-4. If technical, be architecturally rigorous and modern.
-5. Avoid repetitive filler phrases like "Sure, I can help with that!". Dive straight into the answer.
+Executive Formatting Standards:
+1. Direct Core Answer First: Begin immediately with a crisp, direct paragraph that answers the question cleanly and authoritatively. Do NOT use introductory filler (e.g. "Sure!", "Here is a breakdown", "Let me explain").
+2. Professional Structure:
+   - For comparisons (e.g., SQL vs NoSQL, REST vs GraphQL), format the comparison as a clean Markdown table (`| Dimension | SQL | NoSQL |`) or clean titled sections (`### Architectural Model`).
+   - NEVER generate repetitive, nested lists with excessive bold asterisks like:
+     `- **Category**:
+       - **SQL**: ...
+       - **NoSQL**: ...`
+     Avoid excessive asterisk clutter (`**...**`). Keep text clean, natural, and readable.
+3. Clarity and Depth: Provide concrete architectural insight, trade-offs, and practical context.
+4. {guideline}
+5. Context Grounding: If the speaker referred to earlier context in the transcript, ground your response in that context.
 """
 
     user_content = f"Question: {question_text}"
@@ -77,9 +83,9 @@ async def generate_answer(
     api_key = None
     if user_settings:
         if provider_name == "backboard":
-            api_key = user_settings.backboard_api_key
+            api_key = user_settings.backboard_api_key.strip() if user_settings.backboard_api_key and user_settings.backboard_api_key.strip() else None
         else:
-            api_key = user_settings.openrouter_api_key
+            api_key = user_settings.openrouter_api_key.strip() if user_settings.openrouter_api_key and user_settings.openrouter_api_key.strip() else None
 
     provider = get_ai_provider(provider_name=provider_name, api_key=api_key)
 
@@ -93,6 +99,43 @@ async def generate_answer(
     )
 
     start_time = time.time()
+
+    # Auto-resolve or create question in database so it is guaranteed to persist!
+    matched_q = None
+    if req.question_id:
+        matched_q = db.query(DetectedQuestion).filter(
+            DetectedQuestion.session_id == session_id,
+            DetectedQuestion.id == req.question_id
+        ).first()
+
+    if not matched_q:
+        matched_q = (
+            db.query(DetectedQuestion)
+            .filter(
+                DetectedQuestion.session_id == session_id,
+                DetectedQuestion.question_text == req.question_text.strip()
+            )
+            .first()
+        )
+
+    if not matched_q:
+        from sqlalchemy import func
+        max_idx = (
+            db.query(func.max(DetectedQuestion.question_index))
+            .filter(DetectedQuestion.session_id == session_id)
+            .scalar() or 0
+        )
+        matched_q = DetectedQuestion(
+            session_id=session_id,
+            question_text=req.question_text.strip(),
+            context_snippet=req.context,
+            question_index=max_idx + 1
+        )
+        db.add(matched_q)
+        db.commit()
+        db.refresh(matched_q)
+
+    resolved_q_id = matched_q.id
 
     if stream:
         async def event_generator():
@@ -111,7 +154,7 @@ async def generate_answer(
                 # Persist answer to database
                 db_answer = AIAnswer(
                     session_id=session_id,
-                    question_id=req.question_id,
+                    question_id=resolved_q_id,
                     provider=provider_name,
                     model=model_name,
                     answer_text=full_answer or "No answer produced.",
@@ -146,7 +189,7 @@ async def generate_answer(
         total_latency = int((time.time() - start_time) * 1000)
         db_answer = AIAnswer(
             session_id=session_id,
-            question_id=req.question_id,
+            question_id=resolved_q_id,
             provider=provider_name,
             model=model_name,
             answer_text=full_text,

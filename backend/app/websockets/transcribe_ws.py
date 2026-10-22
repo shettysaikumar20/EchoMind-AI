@@ -2,7 +2,7 @@ import json
 import base64
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.entities import SessionModel, TranscriptSegment
@@ -12,6 +12,47 @@ logger = logging.getLogger("echomind.ws")
 router = APIRouter()
 
 
+async def save_and_broadcast_transcript(session_id: str, transcript_data: dict, websocket: WebSocket):
+    text = transcript_data.get("text", "").strip()
+    source = transcript_data.get("source", "mic")
+    is_final = transcript_data.get("is_final", True)
+    start_time = float(transcript_data.get("start_time", 0.0))
+    end_time = float(transcript_data.get("end_time", start_time + 1.0))
+
+    if not text:
+        return
+
+    db: Session = SessionLocal()
+    try:
+        session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if session_obj:
+            segment = TranscriptSegment(
+                session_id=session_id,
+                source=source,
+                text=text,
+                is_final=is_final,
+                start_time=start_time,
+                end_time=end_time
+            )
+            db.add(segment)
+            session_obj.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(segment)
+
+            await websocket.send_text(json.dumps({
+                "type": "transcript_saved",
+                "id": segment.id,
+                "source": segment.source,
+                "text": segment.text,
+                "is_final": segment.is_final,
+                "start_time": segment.start_time,
+                "end_time": segment.end_time,
+                "created_at": segment.created_at.isoformat()
+            }))
+    finally:
+        db.close()
+
+
 @router.websocket("/ws/sessions/{session_id}/transcribe")
 async def websocket_transcription_endpoint(
     websocket: WebSocket,
@@ -19,8 +60,8 @@ async def websocket_transcription_endpoint(
 ):
     await websocket.accept()
     logger.info(f"WebSocket client connected for session {session_id}")
+    total_received_bytes = 0
 
-    # Send initial connection confirmation
     await websocket.send_text(json.dumps({
         "type": "connection_established",
         "session_id": session_id,
@@ -29,7 +70,6 @@ async def websocket_transcription_endpoint(
 
     try:
         while True:
-            # Receive either text (JSON) or binary
             message = await websocket.receive()
             
             if "text" in message:
@@ -38,48 +78,14 @@ async def websocket_transcription_endpoint(
                     msg_type = payload.get("type")
 
                     if msg_type == "ping":
-                        await websocket.send_text(json.dumps({"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()}))
+                        await websocket.send_text(json.dumps({
+                            "type": "pong",
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }))
 
                     elif msg_type == "transcript_segment":
-                        # Client-side recognized speech segment
-                        text = payload.get("text", "").strip()
-                        source = payload.get("source", "mic")
-                        is_final = payload.get("is_final", True)
-                        start_time = float(payload.get("start_time", 0.0))
-                        end_time = float(payload.get("end_time", start_time + 1.0))
-
-                        if text:
-                            # Persist segment to database
-                            db: Session = SessionLocal()
-                            try:
-                                session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
-                                if session_obj:
-                                    segment = TranscriptSegment(
-                                        session_id=session_id,
-                                        source=source,
-                                        text=text,
-                                        is_final=is_final,
-                                        start_time=start_time,
-                                        end_time=end_time
-                                    )
-                                    db.add(segment)
-                                    session_obj.updated_at = datetime.now(timezone.utc)
-                                    db.commit()
-                                    db.refresh(segment)
-
-                                    # Broadcast verified saved transcript back to client
-                                    await websocket.send_text(json.dumps({
-                                        "type": "transcript_saved",
-                                        "id": segment.id,
-                                        "source": segment.source,
-                                        "text": segment.text,
-                                        "is_final": segment.is_final,
-                                        "start_time": segment.start_time,
-                                        "end_time": segment.end_time,
-                                        "created_at": segment.created_at.isoformat()
-                                    }))
-                            finally:
-                                db.close()
+                        # Client-side recognized speech segment (Web Speech API)
+                        await save_and_broadcast_transcript(session_id, payload, websocket)
 
                     elif msg_type == "audio_chunk":
                         # Ingest base64 encoded audio
@@ -87,18 +93,28 @@ async def websocket_transcription_endpoint(
                         source = payload.get("source", "mic")
                         if raw_b64:
                             audio_bytes = base64.b64decode(raw_b64)
+                            total_received_bytes += len(audio_bytes)
                             telemetry = transcriber.process_audio_chunk(
                                 session_id=session_id,
                                 audio_bytes=audio_bytes,
                                 source=source
                             )
                             if telemetry:
-                                await websocket.send_text(json.dumps(telemetry))
+                                if "transcript" in telemetry:
+                                    await save_and_broadcast_transcript(session_id, telemetry["transcript"], websocket)
+                                await websocket.send_text(json.dumps({
+                                    "type": "audio_telemetry",
+                                    "source": telemetry.get("source"),
+                                    "rms": telemetry.get("rms"),
+                                    "timestamp": telemetry.get("timestamp"),
+                                    "bytes_received": total_received_bytes,
+                                    "chunk_size": len(audio_bytes)
+                                }))
 
                     elif msg_type == "flush":
                         res = transcriber.finalize_buffer(session_id)
                         if res:
-                            await websocket.send_text(json.dumps(res))
+                            await save_and_broadcast_transcript(session_id, res, websocket)
 
                 except json.JSONDecodeError:
                     pass
@@ -106,16 +122,44 @@ async def websocket_transcription_endpoint(
             elif "bytes" in message:
                 # Raw binary PCM stream
                 raw_bytes = message["bytes"]
+                total_received_bytes += len(raw_bytes)
                 telemetry = transcriber.process_audio_chunk(
                     session_id=session_id,
                     audio_bytes=raw_bytes,
                     source="mic"
                 )
                 if telemetry:
-                    await websocket.send_text(json.dumps(telemetry))
+                    if "transcript" in telemetry:
+                        await save_and_broadcast_transcript(session_id, telemetry["transcript"], websocket)
+                    await websocket.send_text(json.dumps({
+                        "type": "audio_telemetry",
+                        "source": telemetry.get("source"),
+                        "rms": telemetry.get("rms"),
+                        "timestamp": telemetry.get("timestamp"),
+                        "bytes_received": total_received_bytes,
+                        "chunk_size": len(raw_bytes)
+                    }))
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket client disconnected for session {session_id}")
-        transcriber.finalize_buffer(session_id)
+        final_res = transcriber.finalize_buffer(session_id)
+        if final_res:
+            try:
+                db = SessionLocal()
+                session_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+                if session_obj:
+                    segment = TranscriptSegment(
+                        session_id=session_id,
+                        source=final_res.get("source", "mic"),
+                        text=final_res.get("text", ""),
+                        is_final=True,
+                        start_time=final_res.get("start_time", 0.0),
+                        end_time=final_res.get("end_time", 1.0)
+                    )
+                    db.add(segment)
+                    db.commit()
+                db.close()
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f"WebSocket error in session {session_id}: {e}")

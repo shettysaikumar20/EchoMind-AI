@@ -2,32 +2,62 @@
 node_modules/
 backend/venv/
 .venv/
+venv/
+env/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
 # Build outputs
 dist/
 build/
 .dist/
+.vite/
 
-# Databases & local data
+# Databases & local persistent data
 *.db
+*.sqlite
 *.sqlite3
 echomind.db
 
-# Environment & secrets
+# Environment & Secrets (Never commit secrets!)
 .env
-.env.local
+.env.*
+!.env.example
+!backend/.env.example
 *.pem
 *.key
+*.cert
 
-# IDE & OS
+# Test, Lint & Caches
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.oxlintcache
+
+# Logs & Temporary Files
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+temp/
+tmp/
+*.tmp
+
+# Local Audio & Video Recordings
+recordings/
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.ogg
+
+# IDE & OS files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Test & coverage
-.pytest_cache/
-.coverage
-htmlcov/
+desktop.ini
