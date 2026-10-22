@@ -6,16 +6,22 @@
 **Next-Generation Autonomous Conversational Intelligence & Dual-Stream Acoustic Copilot**
 
 [![Hacktoberfest 2026](https://img.shields.io/badge/HACKTOBERFEST_2026-WEEK_3:_SLOW_&_STEADY-FF6B00?style=for-the-badge&logo=hacktoberfest&logoColor=white)](https://hacktoberfest.com)
+[![Speech-to-Text](https://img.shields.io/badge/STT_ENGINE-ELEVENLABS_SCRIBE_REALTIME-black?style=for-the-badge&logo=elevenlabs&logoColor=white)](https://elevenlabs.io)
 [![Open Weight](https://img.shields.io/badge/NEURAL_CORE-META_LLAMA_3.1_8B-7928CA?style=for-the-badge&logo=meta&logoColor=white)](https://ai.meta.com/llama)
 [![Python](https://img.shields.io/badge/BACKEND-FASTAPI_0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/FRONTEND-REACT_19_|_VITE_8-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
-[![Tests Passing](https://img.shields.io/badge/AUTOMATED_TESTS-15/15_VERIFIED-00E676?style=for-the-badge&logo=pytest&logoColor=black)](https://pytest.org)
+[![Tests Passing](https://img.shields.io/badge/AUTOMATED_TESTS-21/21_VERIFIED-00E676?style=for-the-badge&logo=pytest&logoColor=black)](https://pytest.org)
 [![License](https://img.shields.io/badge/LICENSE-MIT_OPEN_SOURCE-3D5AFE?style=for-the-badge)](LICENSE)
 
 <br/>
 
+🌐 **Live Production Frontend:** [echomind-ai-frontend-mwcb.onrender.com](https://echomind-ai-frontend-mwcb.onrender.com)  
+🚀 **Live Production Backend API:** [echomind-ai-backend-d20k.onrender.com](https://echomind-ai-backend-d20k.onrender.com)
+
+<br/>
+
 > *"In high-stakes meetings, technical interviews, and lectures, humans lose 40% of their cognitive bandwidth to frantic note-taking and question anxiety.*  
-> ***EchoMind AI silently captures every syllable, extracts every question on-the-fly, and streams context-grounded neural answers in real time."***
+> ***EchoMind AI silently captures every syllable with ElevenLabs Scribe Realtime, extracts every question on-the-fly, and streams context-grounded neural answers in real time."***
 
 <br/>
 
@@ -27,15 +33,16 @@
 
 > **"Let AI do the work so humans don't have to."**
 
-Most tools demand more from the human operator: manual typing, tag clicking, stopping to copy-paste. **EchoMind AI** operates on an autonomous philosophy:
+Most meeting assistants demand friction from the user: manual typing, tag clicking, and constant switching between tabs. **EchoMind AI** operates on an autonomous philosophy:
 
 ```
-[ CONVERSATION HAPPENS ] ──────> [ ECHOMIND LISTENS SILENTLY ] ──────> [ QUESTIONS DETECTED ] ──────> [ STREAMED GROUNDED ANSWERS ]
-                                              │                                                                    ▲
-                                              └─────────── (Zero Human Interruption Required) ─────────────────────┘
+[ CONVERSATION HAPPENS ] ──────> [ ELEVENLABS SCRIBE REALTIME ] ──────> [ QUESTIONS DETECTED ] ──────> [ STREAMED GROUNDED ANSWERS ]
+                                                │                                                                      ▲
+                                                └──────────── (Zero Human Interruption Required) ──────────────────────┘
 ```
 
 - **Cognitive Decoupling:** Stay 100% engaged eye-to-eye with your interviewer, client, or team.
+- **Ultra-Low Latency STT:** Powered by **ElevenLabs Scribe Realtime (`scribe_v2_realtime`)**, providing instant interim speech hypotheses and stable committed transcripts with Voice Activity Detection (VAD).
 - **Background Extraction:** Heuristic and neural parsing extracts direct, rhetorical, and multi-part queries during natural speech pauses.
 - **Open-Weight Sovereignty:** Powered by auditable, sovereign open-weight models (`meta-llama/llama-3.1-8b-instruct`), preventing proprietary model lock-in and safeguarding enterprise privacy.
 
@@ -47,16 +54,20 @@ Most tools demand more from the human operator: manual typing, tag clicking, sto
 - **Mode A (Microphone Only):** Raw vocal capture with real-time acoustic normalization via `getUserMedia()`.
 - **Mode B (Browser Tab Audio):** Direct ingestion of Google Meet, Zoom Web, YouTube, or webinars via `getDisplayMedia()`.
 - **Mode C (Microphone + Tab Audio):** Real-time dual-source mixing using `AudioContext`, `createMediaStreamSource`, and zero-feedback `createMediaStreamDestination`.
-- **Hardware Diagnostic Radar:** Built-in hardware inspector analyzing microphone permissions, sample rate negotiation, active channel integrity, and live RMS input volume before recording starts.
+- **Hardware Diagnostic Radar:** Built-in hardware inspector analyzing microphone permissions, sample rate negotiation, active channel integrity, live RMS input volume, and peak metering before recording starts.
 
-### 🧠 Act II — Neural Cognitive Matrix
-- **Sub-Second Streaming Transcription:** Audio frames routed over low-latency WebSockets (`/ws/sessions/{id}/transcribe`) with timestamping and source attribution (`[MIC]`, `[TAB]`, `[COMBINED]`).
+### 🧠 Act II — Neural Cognitive Matrix & ElevenLabs Scribe STT
+- **ElevenLabs Scribe Realtime (`scribe_v2_realtime`):** 16kHz linear PCM streamed securely over WebSocket (`/ws/sessions/{id}/transcribe`).
+- **Live Interim Feedback (`partial_transcript`):** Streamed immediately to the UI with sub-150ms visual feedback as the user speaks.
+- **Committed Final Segments (`committed_transcript`):** Stable, punctuated segments persisted directly into database session history upon natural speech pauses.
+- **Deduplication Engine:** Prevents duplicate, repeated, or fragmented transcript segments from clogging downstream intelligence.
 - **Autonomous Question Deduction:** Dynamic detection triggered on conversational pauses—differentiating statements from critical questions.
 - **Context-Grounded Llama 3.1 Streaming:** Synthesized token-by-token streaming answers referencing preceding meeting transcripts.
 - **Multi-Question HUD & Bulk "Answer All":** Interactive queue cards rendered in formatted markdown with tables, code blocks, and instant multi-query dispatch.
 
 ### 💾 Act III — Chrono-Memory & Total Recall
 - **Crash-Resilient Persistence:** State machine resilient against browser reloads, network timeouts, and server restarts.
+- **Safe Reconnection Lifecycle:** Automatic reconnection with exponential backoff on unexpected drops, while cleanly preserving intentional pause and stop closures.
 - **One-Click Session Continuation:** Resume conversations seamlessly without creating fragmented duplicate records.
 - **Instant Export Protocols:** One-click download of full transcripts, questions, and answers formatted as clean **Markdown (.md)** or structured **JSON**.
 
@@ -84,7 +95,7 @@ Most tools demand more from the human operator: manual typing, tag clicking, sto
 │                  └───────────────┬───────────────┘                                     │
 │                                  v                                                     │
 │                  ┌───────────────────────────────┐                                     │
-│                  │   Inline AudioWorklet Buffer  │                                     │
+│                  │  Downsample to 16kHz PCM mono │                                     │
 │                  └───────────────┬───────────────┘                                     │
 └──────────────────────────────────┼─────────────────────────────────────────────────────┘
                                    │
@@ -94,9 +105,12 @@ Most tools demand more from the human operator: manual typing, tag clicking, sto
 │                              BACKEND RUNTIME (FASTAPI ENGINE)                          │
 │                                                                                        │
 │   ┌──────────────────────────────┐                 ┌───────────────────────────────┐   │
-│   │   WebSocket Stream Router    │ ──────────────> │    Continuous STT Pipeline    │   │
-│   └──────────────────────────────┘                 └───────────────┬───────────────┘   │
-│                                                                    v                   │
+│   │   WebSocket Stream Router    │ ──────────────> │ ElevenLabs Scribe Realtime    │   │
+│   │   (FastAPI Audio Proxy)      │ <────────────── │ (wss://api.elevenlabs.io)     │   │
+│   └──────────────┬───────────────┘                 └───────────────┬───────────────┘   │
+│                  │                                                 │                   │
+│                  │ Partial / Committed Transcripts                 │                   │
+│                  v                                                 v                   │
 │   ┌──────────────────────────────┐                 ┌───────────────────────────────┐   │
 │   │   Real-Time Question Queue   │ <────────────── │  Heuristic Question Detector  │   │
 │   └──────────────┬───────────────┘                 └───────────────────────────────┘   │
@@ -117,19 +131,20 @@ Most tools demand more from the human operator: manual typing, tag clicking, sto
 
 | Domain | Technology | Cinematic Purpose |
 |---|---|---|
+| **Speech-to-Text (STT)** | **ElevenLabs Scribe Realtime** | Ultra-low latency (<150ms) streaming recognition via `scribe_v2_realtime` |
 | **Frontend UI** | **React 19 + TypeScript** | Ultrafast reactive state with zero interface lag |
-| **Styling & FX** | **Tailwind CSS v4 + Framer Motion** | Glassmorphic dark HUD with smooth micro-animations |
-| **Streaming Engine** | **FastAPI + Asyncio WebSockets** | Bi-directional duplex audio and token piping |
-| **Neural LLM Core** | **Meta Llama 3.1 8B Instruct** | Sovereign, open-weight reasoning and synthesis |
-| **Audio Processing** | **Web Audio API + AudioWorklet** | Zero-latency browser hardware mixing and filtering |
-| **Persistence** | **SQLAlchemy 2.0 + SQLite / Postgres** | Rock-solid relational schemas and session recovery |
-| **Testing** | **Pytest + Pytest-Asyncio** | 15/15 battle-tested scenarios verifying entire lifecycle |
+| **Styling & FX** | **Tailwind CSS v4 + Lucide Icons** | Glassmorphic dark HUD with smooth micro-animations |
+| **Streaming Engine** | **FastAPI + Asyncio WebSockets** | Duplex 16kHz audio proxying and token piping |
+| **Neural LLM Core** | **Meta Llama 3.1 8B Instruct** | Sovereign, open-weight reasoning and synthesis via OpenRouter |
+| **Audio Processing** | **Web Audio API + AudioWorklet** | Zero-latency browser hardware mixing and 16kHz resampling |
+| **Persistence** | **SQLAlchemy 2.0 + SQLite / Postgres** | Relational schemas, transcript segments, and session recovery |
+| **Testing** | **Pytest + Pytest-Asyncio** | 21/21 battle-tested scenarios verifying STT, deduplication, and Q&A |
 
 ---
 
 ## 🦙 Open-Weight Neural Intelligence: Meta Llama 3.1
 
-EchoMind AI was deliberately architected for **Open-Weight Supremacy**:
+EchoMind AI is architected for **Open-Weight Supremacy**:
 
 $$\text{Latency} \le 400\text{ms} \quad \big| \quad \text{Privacy} = 100\% \quad \big| \quad \text{Vendor Lock-In} = 0$$
 
@@ -153,7 +168,11 @@ cd EchoMind-AI
 copy .env.example .env
 copy backend\.env.example backend\.env
 
-:: 2. Fire up the entire ecosystem
+:: 2. Configure your API keys in backend\.env
+:: ELEVENLABS_API_KEY=your_key
+:: OPENROUTER_API_KEY=your_key
+
+:: 3. Fire up the entire ecosystem
 .\run_echomind.bat
 ```
 
@@ -185,7 +204,8 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 cp .env.example .env
-alembic upgrade head
+
+# Configure backend/.env with ELEVENLABS_API_KEY & OPENROUTER_API_KEY
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -207,7 +227,11 @@ npm run dev
 docker build -t echomind-ai .
 
 # Launch with environment variables
-docker run -d -p 8000:8000 -e OPENROUTER_API_KEY="your-openrouter-key" echomind-ai
+docker run -d -p 8000:8000 \
+  -e ELEVENLABS_API_KEY="your-elevenlabs-key" \
+  -e STT_PROVIDER="elevenlabs" \
+  -e OPENROUTER_API_KEY="your-openrouter-key" \
+  echomind-ai
 ```
 
 ---
@@ -219,6 +243,9 @@ Set up your `.env` or `backend/.env` with these parameters:
 | Variable | Required | Default | Description |
 |---|:---:|---|---|
 | `PROJECT_NAME` | No | `"EchoMind AI"` | Application header moniker |
+| `STT_PROVIDER` | **Yes** | `"elevenlabs"` | Speech-to-text engine (`elevenlabs` or optional `whisper`) |
+| `ELEVENLABS_API_KEY` | **Yes** (for STT) | `""` | ElevenLabs API key for real-time speech recognition |
+| `ELEVENLABS_MODEL_ID` | No | `"scribe_v2_realtime"` | ElevenLabs model identifier |
 | `OPENROUTER_API_KEY` | Recommended* | `""` | OpenRouter access key for Llama 3.1 streaming |
 | `BACKBOARD_API_KEY` | Optional* | `""` | Alternative open-weight inference provider |
 | `AI_PROVIDER` | No | `"openrouter"` | Active provider engine (`openrouter` or `backboard`) |
@@ -226,19 +253,34 @@ Set up your `.env` or `backend/.env` with these parameters:
 | `DATABASE_URL` | No | `"sqlite:///./echomind.db"` | Relational database URI (SQLite or PostgreSQL) |
 | `SECRET_KEY` | **Yes** (Prod) | `"dev-secret-key-..."` | 32+ character JWT signing key |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `10080` (7 Days) | Session authentication TTL |
-| `STT_MODE` | No | `"lightweight"` | Speech-to-text pipeline mode |
-
-*\*Note: Without an API key, EchoMind AI operates in Diagnostic Mode, enabling full audio testing, capture, transcription visualization, and UI workflows.*
 
 ---
 
-## 🖥️ Mission Control: Interface Gallery
+## ☁️ Render Production Deployment
+
+EchoMind AI is configured for automated deployment on Render using [render.yaml](render.yaml):
+
+1. **FastAPI Backend Web Service:**
+   - **Build Command:** `cd backend && pip install -r requirements.txt`
+   - **Start Command:** `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Required Environment Variables (Dashboard):**
+     - `ELEVENLABS_API_KEY`: Your ElevenLabs API key
+     - `STT_PROVIDER`: `elevenlabs`
+     - `OPENROUTER_API_KEY`: Your OpenRouter API key
+2. **React Static Site:**
+   - **Build Command:** `cd frontend && npm install && npm run build`
+   - **Publish Directory:** `./frontend/dist`
+   - **Environment Variable:** `VITE_API_URL=https://echomind-ai-backend-d20k.onrender.com`
+
+---
+
+## 🖥️ Mission Control: Interface Features
 
 <div align="center">
 
-| 🎙️ Real-Time Live Workspace | 🎛️ Audio Hardware Inspector |
+| 🎙️ Real-Time Live Workspace | 🎛️ Audio Hardware & STT Inspector |
 |:---:|:---:|
-| Dual-stream audio ingestion, waveform audio visualizer, and streaming transcription telemetry. | Real-time microphone permission gate, channel diagnostics, sample rate test, and live RMS meter. |
+| Dual-stream audio ingestion, waveform audio visualizer, interim speech feedback, and streaming transcription telemetry. | Real-time microphone permission gate, channel diagnostics, sample rate test, live RMS meter, and STT connection diagnostics. |
 
 | ❓ Cognitive Question Deck | 📜 Chrono-Archive & Export |
 |:---:|:---:|
@@ -251,7 +293,7 @@ Set up your `.env` or `backend/.env` with these parameters:
 ## ⚠️ Tactical Warnings & Known Limitations
 
 ### 1. Browser Acoustic Capture & Autoplay Security
-- **User Gesture Requirement:** Modern browser security policies (Chrome, Edge, Safari) prohibit Web Audio initialization without explicit user activation. EchoMind AI arms the `AudioContext` automatically upon clicking **"Start Session"** or **"Audio Preview"**.
+- **User Gesture Requirement:** Modern browser security policies (Chrome, Edge, Safari) prohibit Web Audio initialization without explicit user activation. EchoMind AI arms the `AudioContext` automatically upon clicking **"Start Listening"** or **"Preview Audio"**.
 - **Cryptographic Origin Gate:** Browser microphone access requires a secure origin (`https://` or `http://localhost`). It will not run over raw unencrypted LAN IPs (`http://192.168.x.x`).
 - **Sample Rate Normalization:** USB interfaces and headsets range between 44.1kHz and 48kHz. EchoMind’s internal resampler standardizes audio to 16kHz for speech recognition.
 
@@ -265,31 +307,39 @@ Set up your `.env` or `backend/.env` with these parameters:
 ## 🛡️ Privacy, Security & Data Sovereignty
 
 - **Zero Audio Retention:** EchoMind AI processes audio streams ephemerally in memory buffers. No raw `.wav` or `.mp3` recordings are written to disk.
+- **Backend Key Protection:** `ELEVENLABS_API_KEY` is strictly maintained on the server-side proxy and is never transmitted to the frontend client.
 - **Dual-Party Consent Protocol:** Always notify all meeting participants and adhere to regional wiretapping and recording consent regulations before activating acoustic monitoring.
-- **Local Relational Control:** All meeting transcripts, questions, and generated answers reside exclusively in your local database (`echomind.db`) or your designated private database cluster.
+- **Local Relational Control:** All meeting transcripts, questions, and generated answers reside in your database (`echomind.db`) or designated private database cluster.
 
 ---
 
 ## 🧪 Automated Test Verification
 
-EchoMind AI is validated with a comprehensive automated test suite covering every phase of the session lifecycle:
+EchoMind AI is validated with a comprehensive automated test suite covering every phase of the session lifecycle and real-time speech recognition:
 
 ```bash
 cd backend
-.\venv\Scripts\pytest.exe -v
+pytest tests/
 ```
 
 ```
-tests\test_audio_and_recovery.py .....                                   [ 33%]
-tests\test_echomind.py ..........                                        [100%]
+tests\test_audio_and_recovery.py .....                                   [ 23%]
+tests\test_echomind.py ..........                                        [ 71%]
+tests\test_elevenlabs_stt.py ......                                      [100%]
 
-======================= 15 passed, 1 warning in 22.41s ========================
+======================= 21 passed, 1 warning in 49.01s ========================
 ```
 
 - `test_audio_mode_a_mic` — Mode A microphone capture pipeline initialization
 - `test_audio_mode_b_tab` — Mode B browser tab capture authorization
 - `test_audio_mode_c_dual` — Mode C dual-bus Web Audio mixing
 - `test_session_recovery_after_refresh` — Resuming interrupted conversations without data duplication
+- `test_calculate_rms_and_peak` — Accurate 16-bit PCM telemetry calculation
+- `test_duplicate_transcript_prevention` — Suppression of duplicate or repeated transcript segments
+- `test_final_transcript_persistence` — Database persistence of committed transcript segments
+- `test_elevenlabs_missing_api_key` — Graceful handling of missing provider credentials
+- `test_pause_and_flush_behavior` — Manual commit on pause / stop
+- `test_live_elevenlabs_three_sentences_and_qa_pipeline` — Live end-to-end benchmark with 3 spoken questions ("What is Java programming?", "What is the difference between SQL and NoSQL?", "Explain artificial intelligence in simple terms.") verifying transcription accuracy, question deduction, and OpenRouter Llama 3.1 answer generation
 - `test_multiple_question_extraction` — Multi-part and indirect question extraction
 - `test_no_question_transcripts` — Negative testing (no hallucinations during standard speech)
 - `test_answer_generation` — Llama 3.1 contextual grounding
