@@ -84,10 +84,16 @@ export const AudioDiagnosticPanel: React.FC<AudioDiagnosticPanelProps> = ({
             <Cpu className="w-3.5 h-3.5 text-cyan-400" />
             <span>2. Audio Processing</span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span className="text-slate-500">Context State:</span>
-            <span className={audioDiagnostics.audioContextState === 'running' ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-              {audioDiagnostics.audioContextState}
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                audioDiagnostics.audioContextState === 'running'
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
+              }`}
+            >
+              {audioDiagnostics.audioContextState.toUpperCase()}
             </span>
           </div>
           <div className="flex justify-between">
@@ -145,7 +151,7 @@ export const AudioDiagnosticPanel: React.FC<AudioDiagnosticPanelProps> = ({
         <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
           <div className="flex items-center gap-1.5 text-slate-400 font-sans font-semibold">
             <Network className="w-3.5 h-3.5 text-purple-400" />
-            <span>4. WebSocket & STT</span>
+            <span>4. WebSocket & Whisper STT</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">WS Connection:</span>
@@ -162,16 +168,26 @@ export const AudioDiagnosticPanel: React.FC<AudioDiagnosticPanelProps> = ({
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Bytes Sent:</span>
-            <span className="text-purple-300 font-bold">
-              {(networkDiagnostics.bytesTransmitted / 1024).toFixed(1)} KB
+            <span className="text-slate-500">Whisper Engine:</span>
+            <span className={networkDiagnostics.whisperReady ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+              {networkDiagnostics.whisperReady ? 'Ready (int8)' : 'Initializing...'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Backend Rcvd:</span>
-            <span className="text-emerald-400 font-bold">
-              {(networkDiagnostics.bytesReceivedByBackend / 1024).toFixed(1)} KB
+            <span className="text-slate-500">Buffer / Speech:</span>
+            <span className="text-cyan-300">
+              {networkDiagnostics.bufferSeconds}s {networkDiagnostics.speechDetected ? '🎙️ [Speech]' : '⏳ [Silence]'}
             </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">STT Runs:</span>
+            <span className="text-purple-300 font-bold">
+              {networkDiagnostics.attemptCount} runs ({networkDiagnostics.successCount} saved)
+            </span>
+          </div>
+          <div className="flex justify-between text-[11px] pt-0.5 text-slate-400">
+            <span>Sent: {(networkDiagnostics.bytesTransmitted / 1024).toFixed(1)}KB</span>
+            <span>Rcvd: {(networkDiagnostics.bytesReceivedByBackend / 1024).toFixed(1)}KB</span>
           </div>
         </div>
       </div>

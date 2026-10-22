@@ -186,6 +186,58 @@ export function useAudioCapture({ onAudioData, onTabEnded, onError }: UseAudioCa
     }
   }, [selectedDeviceId]);
 
+  // Synchronous/User-Gesture AudioContext resumption
+  const resumeAudioContext = useCallback(async () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        const ctx = new AudioContextClass();
+        audioContextRef.current = ctx;
+        ctx.onstatechange = () => {
+          setDiagnostics((prev) => ({
+            ...prev,
+            audioContextState: ctx.state,
+            audioContextSampleRate: ctx.sampleRate,
+          }));
+        };
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      setDiagnostics((prev) => ({
+        ...prev,
+        audioContextState: audioContextRef.current?.state || 'running',
+        audioContextSampleRate: audioContextRef.current?.sampleRate || 0,
+      }));
+    } catch (e: any) {
+      console.warn('AudioContext resume helper note:', e);
+    }
+  }, []);
+
+  // Listen to any user interaction to automatically thaw suspended AudioContext
+  useEffect(() => {
+    const handleGesture = () => {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().then(() => {
+          setDiagnostics((prev) => ({
+            ...prev,
+            audioContextState: audioContextRef.current?.state || 'running',
+          }));
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('click', handleGesture, { capture: true });
+    window.addEventListener('pointerdown', handleGesture, { capture: true });
+    window.addEventListener('keydown', handleGesture, { capture: true });
+
+    return () => {
+      window.removeEventListener('click', handleGesture, { capture: true });
+      window.removeEventListener('pointerdown', handleGesture, { capture: true });
+      window.removeEventListener('keydown', handleGesture, { capture: true });
+    };
+  }, []);
+
   useEffect(() => {
     checkPermissionStatus();
     refreshAudioDevices();
@@ -311,18 +363,22 @@ export function useAudioCapture({ onAudioData, onTabEnded, onError }: UseAudioCa
   }, []);
 
   // Setup Web Audio graph with AudioWorklet and persistent references
+  // Setup Web Audio graph with AudioWorklet, digital gain boost, and persistent references
   const setupAudioGraph = async (sources: MediaStream[]) => {
-    // Clean up any previously orphaned audio contexts
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      try {
-        await audioContextRef.current.close();
-      } catch {}
-      audioContextRef.current = null;
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    let ctx = audioContextRef.current;
+    if (!ctx || ctx.state === 'closed') {
+      ctx = new AudioContextClass();
+      audioContextRef.current = ctx;
     }
 
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    const ctx = new AudioContextClass();
-    audioContextRef.current = ctx;
+    ctx.onstatechange = () => {
+      setDiagnostics((prev) => ({
+        ...prev,
+        audioContextState: ctx?.state || 'none',
+        audioContextSampleRate: ctx?.sampleRate || 0,
+      }));
+    };
 
     // Await resume to satisfy browser autoplay requirements
     if (ctx.state === 'suspended') {
@@ -347,15 +403,20 @@ export function useAudioCapture({ onAudioData, onTabEnded, onError }: UseAudioCa
     const destination = ctx.createMediaStreamDestination();
     sourceNodesRef.current = [];
 
-    // Connect all input streams directly (WITHOUT creating temporary MediaStream wrappers)
+    // Connect all input streams directly through a clean 2.5x digital gain stage
     sources.forEach((stream) => {
       const audioTracks = stream.getAudioTracks();
       if (audioTracks.length > 0) {
         const sourceNode = ctx.createMediaStreamSource(stream);
-        // CRITICAL: Hold permanent reference so V8 cannot garbage-collect the node
         sourceNodesRef.current.push(sourceNode);
-        sourceNode.connect(analyser);
-        sourceNode.connect(destination);
+
+        // Pre-amplification gain (2.5x) to boost quiet microphones above the VAD floor
+        const inputGain = ctx.createGain();
+        inputGain.gain.setValueAtTime(2.5, ctx.currentTime);
+        sourceNode.connect(inputGain);
+
+        inputGain.connect(analyser);
+        inputGain.connect(destination);
 
         const track = audioTracks[0];
         setDiagnostics((prev) => ({
@@ -494,6 +555,7 @@ export function useAudioCapture({ onAudioData, onTabEnded, onError }: UseAudioCa
     async (mode: CaptureMode = captureMode) => {
       setErrorMessage(null);
       sampleCountRef.current = 0;
+      resumeAudioContext();
       try {
         cleanupAudioPipeline();
         const activeStreams: MediaStream[] = [];
@@ -525,7 +587,7 @@ export function useAudioCapture({ onAudioData, onTabEnded, onError }: UseAudioCa
         return false;
       }
     },
-    [captureMode, cleanupAudioPipeline, onError]
+    [captureMode, cleanupAudioPipeline, onError, resumeAudioContext]
   );
 
   // Independent 5-second Microphone Capture Test (Step 3)
@@ -580,6 +642,7 @@ export function useAudioCapture({ onAudioData, onTabEnded, onError }: UseAudioCa
       setRecordingState('REQUESTING_PERMISSION');
       setCaptureMode(mode);
       sampleCountRef.current = 0;
+      resumeAudioContext();
 
       try {
         const activeStreams: MediaStream[] = [];
@@ -733,5 +796,6 @@ export function useAudioCapture({ onAudioData, onTabEnded, onError }: UseAudioCa
     toggleAudioMonitoring,
     startAudioPreview,
     recordTestClip,
+    resumeAudioContext,
   };
 }

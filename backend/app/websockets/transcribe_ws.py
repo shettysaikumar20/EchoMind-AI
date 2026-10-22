@@ -62,9 +62,14 @@ async def websocket_transcription_endpoint(
     logger.info(f"WebSocket client connected for session {session_id}")
     total_received_bytes = 0
 
+    model = transcriber.finalize_buffer  # reference
+    from app.services.transcription import get_whisper_model
+    whisper_ready = bool(get_whisper_model() is not None)
+
     await websocket.send_text(json.dumps({
         "type": "connection_established",
         "session_id": session_id,
+        "whisper_ready": whisper_ready,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }))
 
@@ -105,7 +110,14 @@ async def websocket_transcription_endpoint(
                                 await websocket.send_text(json.dumps({
                                     "type": "audio_telemetry",
                                     "source": telemetry.get("source"),
-                                    "rms": telemetry.get("rms"),
+                                    "rms": telemetry.get("rms", 0.0),
+                                    "peak": telemetry.get("peak", 0.0),
+                                    "buffer_seconds": telemetry.get("buffer_seconds", 0.0),
+                                    "whisper_ready": telemetry.get("whisper_ready", False),
+                                    "speech_detected": telemetry.get("speech_detected", False),
+                                    "attempt_count": telemetry.get("attempt_count", 0),
+                                    "success_count": telemetry.get("success_count", 0),
+                                    "last_transcription": telemetry.get("last_transcription", ""),
                                     "timestamp": telemetry.get("timestamp"),
                                     "bytes_received": total_received_bytes,
                                     "chunk_size": len(audio_bytes)
@@ -134,7 +146,14 @@ async def websocket_transcription_endpoint(
                     await websocket.send_text(json.dumps({
                         "type": "audio_telemetry",
                         "source": telemetry.get("source"),
-                        "rms": telemetry.get("rms"),
+                        "rms": telemetry.get("rms", 0.0),
+                        "peak": telemetry.get("peak", 0.0),
+                        "buffer_seconds": telemetry.get("buffer_seconds", 0.0),
+                        "whisper_ready": telemetry.get("whisper_ready", False),
+                        "speech_detected": telemetry.get("speech_detected", False),
+                        "attempt_count": telemetry.get("attempt_count", 0),
+                        "success_count": telemetry.get("success_count", 0),
+                        "last_transcription": telemetry.get("last_transcription", ""),
                         "timestamp": telemetry.get("timestamp"),
                         "bytes_received": total_received_bytes,
                         "chunk_size": len(raw_bytes)

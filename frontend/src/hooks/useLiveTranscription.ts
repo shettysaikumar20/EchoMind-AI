@@ -8,6 +8,11 @@ export interface NetworkDiagnostics {
   bytesTransmitted: number;
   bytesReceivedByBackend: number;
   backendRms: number;
+  bufferSeconds: number;
+  whisperReady: boolean;
+  speechDetected: boolean;
+  attemptCount: number;
+  successCount: number;
   lastTranscription: string;
   lastError: string | null;
 }
@@ -36,6 +41,11 @@ export function useLiveTranscription({
     bytesTransmitted: 0,
     bytesReceivedByBackend: 0,
     backendRms: 0,
+    bufferSeconds: 0,
+    whisperReady: false,
+    speechDetected: false,
+    attemptCount: 0,
+    successCount: 0,
     lastTranscription: '',
     lastError: null,
   });
@@ -150,6 +160,17 @@ export function useLiveTranscription({
             ...prev,
             backendRms: data.rms ?? 0,
             bytesReceivedByBackend: data.bytes_received ?? prev.bytesReceivedByBackend,
+            bufferSeconds: data.buffer_seconds ?? prev.bufferSeconds,
+            whisperReady: typeof data.whisper_ready === 'boolean' ? data.whisper_ready : prev.whisperReady,
+            speechDetected: typeof data.speech_detected === 'boolean' ? data.speech_detected : prev.speechDetected,
+            attemptCount: data.attempt_count ?? prev.attemptCount,
+            successCount: data.success_count ?? prev.successCount,
+            lastTranscription: data.last_transcription || prev.lastTranscription,
+          }));
+        } else if (data.type === 'connection_established') {
+          setNetworkDiagnostics((prev) => ({
+            ...prev,
+            whisperReady: typeof data.whisper_ready === 'boolean' ? data.whisper_ready : prev.whisperReady,
           }));
         } else if (data.type === 'error') {
           setNetworkDiagnostics((prev) => ({

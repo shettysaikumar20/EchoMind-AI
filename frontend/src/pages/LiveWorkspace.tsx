@@ -67,6 +67,7 @@ export const LiveWorkspace: React.FC = () => {
     toggleAudioMonitoring,
     startAudioPreview,
     recordTestClip,
+    resumeAudioContext,
   } = useAudioCapture({
     onAudioData: (buffer) => audioDataHandlerRef.current?.(buffer),
     onError: (err) => showToast(`Audio Error: ${err}`),
@@ -286,6 +287,7 @@ export const LiveWorkspace: React.FC = () => {
 
   // 1. START
   const handleStart = async (modeToUse: CaptureMode = captureMode) => {
+    resumeAudioContext();
     let session = activeSession;
     if (!session) {
       try {

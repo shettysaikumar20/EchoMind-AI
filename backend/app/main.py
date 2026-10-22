@@ -22,6 +22,15 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing EchoMind AI database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database initialized successfully.")
+    
+    # Pre-warm faster-whisper model in background thread
+    try:
+        import asyncio
+        from app.services.transcription import get_whisper_model
+        asyncio.get_running_loop().run_in_executor(None, get_whisper_model)
+    except Exception as e:
+        logger.warning(f"Could not pre-warm Whisper model: {e}")
+        
     yield
     # Shutdown
     logger.info("EchoMind AI backend shutting down...")
