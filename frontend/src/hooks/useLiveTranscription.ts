@@ -26,6 +26,7 @@ interface UseLiveTranscriptionProps {
   captureMode: CaptureMode;
   isRecording: boolean;
   onNewFinalSegment?: (segment: TranscriptSegment) => void;
+  onError?: (errorMsg: string) => void;
 }
 
 export function useLiveTranscription({
@@ -33,6 +34,7 @@ export function useLiveTranscription({
   captureMode,
   isRecording,
   onNewFinalSegment,
+  onError,
 }: UseLiveTranscriptionProps) {
   const [transcripts, setTranscripts] = useState<TranscriptSegment[]>([]);
   const [interimText, setInterimText] = useState<string>('');
@@ -62,6 +64,7 @@ export function useLiveTranscription({
   const sessionIdRef = useRef<string | null>(sessionId);
   const isRecordingRef = useRef<boolean>(isRecording);
   const onNewFinalSegmentRef = useRef(onNewFinalSegment);
+  const onErrorRef = useRef(onError);
   const pendingChunksRef = useRef<ArrayBuffer[]>([]);
   const bytesTransmittedRef = useRef<number>(0);
   const isIntentionalCloseRef = useRef<boolean>(false);
@@ -80,6 +83,10 @@ export function useLiveTranscription({
   useEffect(() => {
     onNewFinalSegmentRef.current = onNewFinalSegment;
   }, [onNewFinalSegment]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   // Connect WebSocket when sessionId is valid
   const connectWebSocket = useCallback(() => {
@@ -234,11 +241,16 @@ export function useLiveTranscription({
               whisperReady: typeof data.whisper_ready === 'boolean' ? data.whisper_ready : prev.whisperReady,
               lastError: data.error || null,
             }));
+            if (data.error) {
+              onErrorRef.current?.(data.error);
+            }
           } else if (data.type === 'error') {
+            const errMsg = data.message || 'Backend transcription error';
             setNetworkDiagnostics((prev) => ({
               ...prev,
-              lastError: data.message || 'Backend transcription error',
+              lastError: errMsg,
             }));
+            onErrorRef.current?.(errMsg);
           }
         } catch (e: any) {
           console.warn('Error parsing WS message:', e);

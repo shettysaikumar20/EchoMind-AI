@@ -93,6 +93,7 @@ export const LiveWorkspace: React.FC = () => {
     sessionId: activeSession?.id || null,
     captureMode,
     isRecording: recordingState === 'RECORDING',
+    onError: (err) => showToast(`STT Notice: ${err}`),
   });
 
   audioDataHandlerRef.current = sendAudioChunk;
@@ -602,6 +603,24 @@ export const LiveWorkspace: React.FC = () => {
         <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {/* STT Status / Missing API Key Alert */}
+      {networkDiagnostics.lastError && (
+        <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Speech Recognition Notice:</strong> {networkDiagnostics.lastError}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowLiveDiagnostics(true)}
+            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11px] font-semibold border border-amber-500/40 cursor-pointer shrink-0"
+          >
+            Diagnostics
+          </button>
         </div>
       )}
 
