@@ -1,4 +1,3 @@
-
 services:
   # EchoMind AI FastAPI Backend
   - type: web
@@ -12,6 +11,10 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: DATABASE_URL
+        sync: false
+      - key: STT_PROVIDER
+        value: elevenlabs
+      - key: ELEVENLABS_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false

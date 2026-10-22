@@ -23,13 +23,20 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database initialized successfully.")
     
-    # Pre-warm faster-whisper model in background thread
-    try:
-        import asyncio
-        from app.services.transcription import get_whisper_model
-        asyncio.get_running_loop().run_in_executor(None, get_whisper_model)
-    except Exception as e:
-        logger.warning(f"Could not pre-warm Whisper model: {e}")
+    # Pre-warm STT provider
+    if settings.STT_PROVIDER == "elevenlabs":
+        logger.info(f"STT Provider configured: ElevenLabs Scribe Realtime (model: {settings.ELEVENLABS_MODEL_ID})")
+        if not settings.ELEVENLABS_API_KEY:
+            logger.warning("ELEVENLABS_API_KEY is not set. Set it in environment to enable speech transcription.")
+        else:
+            logger.info("ElevenLabs API key is configured.")
+    elif settings.STT_PROVIDER == "whisper":
+        try:
+            import asyncio
+            from app.services.transcription import get_whisper_model
+            asyncio.get_running_loop().run_in_executor(None, get_whisper_model)
+        except Exception as e:
+            logger.warning(f"Could not pre-warm Whisper model: {e}")
         
     yield
     # Shutdown
@@ -39,7 +46,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Listen. Understand. Answer. Remember. Real-time AI conversation assistant for Hacktoberfest 2026.",
+    description="Listen. Understand. Answer. Remember. Real-time AI conversation assistant with ElevenLabs Scribe Realtime STT.",
     lifespan=lifespan
 )
 
@@ -68,6 +75,8 @@ def root():
         "app": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "online",
+        "stt_provider": settings.STT_PROVIDER,
+        "stt_model": settings.ELEVENLABS_MODEL_ID if settings.STT_PROVIDER == "elevenlabs" else "faster-whisper",
         "message": "EchoMind AI backend is live and operational.",
         "docs": "/docs",
         "health": "/api/health",
@@ -86,6 +95,7 @@ def api_root():
         "app": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "online",
+        "stt_provider": settings.STT_PROVIDER,
         "docs": "/docs",
         "health": "/api/health"
     }
@@ -105,6 +115,8 @@ def health_check(db: Session = Depends(get_db)):
         "app": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "database": db_status,
+        "stt_provider": settings.STT_PROVIDER,
+        "has_elevenlabs_key": bool(settings.ELEVENLABS_API_KEY),
         "default_provider": settings.AI_PROVIDER,
         "default_model": settings.AI_MODEL,
         "has_openrouter_key": bool(settings.OPENROUTER_API_KEY),

@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_BASE: str = "https://openrouter.ai/api/v1"
     
     # STT Settings
+    STT_PROVIDER: str = "elevenlabs"  # "elevenlabs" | "whisper"
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_WS_URL: str = "wss://api.elevenlabs.io/v1/speech-to-text/realtime"
+    ELEVENLABS_MODEL_ID: str = "scribe_v2_realtime"
     STT_MODE: str = "lightweight"  # "lightweight" | "demo" | "faster-whisper"
     
     # CORS
@@ -36,7 +40,7 @@ class Settings(BaseSettings):
     ]
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env"),
         env_file_encoding="utf-8",
         extra="ignore"
     )

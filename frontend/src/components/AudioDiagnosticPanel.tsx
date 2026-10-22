@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Radio, Cpu, Network, Volume2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Activity, Radio, Cpu, Network, Volume2, AlertCircle, CheckCircle2, MessageSquare } from 'lucide-react';
 import { AudioDiagnostics } from '../hooks/useAudioCapture';
 import { NetworkDiagnostics } from '../hooks/useLiveTranscription';
 
@@ -13,6 +13,7 @@ export const AudioDiagnosticPanel: React.FC<AudioDiagnosticPanelProps> = ({
   networkDiagnostics,
 }) => {
   const isAudioActive = audioDiagnostics.liveRms > 0.008;
+  const isElevenLabs = networkDiagnostics.sttProvider !== 'whisper';
 
   return (
     <div className="rounded-2xl bg-slate-950/90 border border-slate-800 p-4 space-y-4 shadow-xl backdrop-blur-md">
@@ -147,11 +148,11 @@ export const AudioDiagnosticPanel: React.FC<AudioDiagnosticPanelProps> = ({
           </div>
         </div>
 
-        {/* Stage 4: WebSocket Transmission */}
+        {/* Stage 4: STT WebSocket Transmission */}
         <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
           <div className="flex items-center gap-1.5 text-slate-400 font-sans font-semibold">
             <Network className="w-3.5 h-3.5 text-purple-400" />
-            <span>4. WebSocket & Whisper STT</span>
+            <span>4. {isElevenLabs ? 'ElevenLabs Scribe STT' : 'Whisper STT'}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">WS Connection:</span>
@@ -168,46 +169,56 @@ export const AudioDiagnosticPanel: React.FC<AudioDiagnosticPanelProps> = ({
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Whisper Engine:</span>
-            <span className={networkDiagnostics.whisperReady ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-              {networkDiagnostics.whisperReady ? 'Ready (int8)' : 'Initializing...'}
+            <span className="text-slate-500">STT Provider:</span>
+            <span className="text-cyan-300 font-bold">
+              {isElevenLabs ? 'ElevenLabs' : 'Whisper'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Buffer / Speech:</span>
-            <span className="text-cyan-300">
-              {networkDiagnostics.bufferSeconds}s {networkDiagnostics.speechDetected ? '🎙️ [Speech]' : '⏳ [Silence]'}
+            <span className="text-slate-500">STT State:</span>
+            <span className={networkDiagnostics.sttReady ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+              {networkDiagnostics.sttReady ? 'Ready (Realtime)' : 'Connecting...'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">STT Runs:</span>
-            <span className="text-purple-300 font-bold">
-              {networkDiagnostics.attemptCount} runs ({networkDiagnostics.successCount} saved)
+            <span className="text-slate-500">Speech State:</span>
+            <span className="text-purple-300">
+              {networkDiagnostics.speechDetected ? '🎙️ [Speech]' : '⏳ [Silence]'}
             </span>
           </div>
           <div className="flex justify-between text-[11px] pt-0.5 text-slate-400">
             <span>Sent: {(networkDiagnostics.bytesTransmitted / 1024).toFixed(1)}KB</span>
-            <span>Rcvd: {(networkDiagnostics.bytesReceivedByBackend / 1024).toFixed(1)}KB</span>
+            <span>Retries: {networkDiagnostics.reconnectAttempts}</span>
           </div>
         </div>
       </div>
 
-      {/* Last Transcription & Error Output Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-slate-800 text-xs">
+      {/* Partial Transcription, Final Output & Error Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 border-t border-slate-800 text-xs">
         <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-          <div className="text-[11px] text-slate-400 font-semibold flex items-center gap-1.5 font-sans">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Last Transcription Output:</span>
+          <div className="text-[11px] text-cyan-400 font-semibold flex items-center gap-1.5 font-sans">
+            <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Partial Speech (Live):</span>
           </div>
-          <p className="font-mono text-emerald-300 italic truncate">
-            {networkDiagnostics.lastTranscription ? `"${networkDiagnostics.lastTranscription}"` : 'None yet (speak to transcribe)'}
+          <p className="font-mono text-cyan-300 italic truncate">
+            {networkDiagnostics.partialTranscription ? `"${networkDiagnostics.partialTranscription}"` : 'Listening...'}
           </p>
         </div>
 
         <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-          <div className="text-[11px] text-slate-400 font-semibold flex items-center gap-1.5 font-sans">
+          <div className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5 font-sans">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Finalized Segment:</span>
+          </div>
+          <p className="font-mono text-emerald-300 italic truncate">
+            {networkDiagnostics.lastTranscription ? `"${networkDiagnostics.lastTranscription}"` : 'None yet'}
+          </p>
+        </div>
+
+        <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+          <div className="text-[11px] text-amber-400 font-semibold flex items-center gap-1.5 font-sans">
             <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-            <span>Last Diagnostic Error / Warning:</span>
+            <span>Last Provider Error / Status:</span>
           </div>
           <p className={`font-mono text-[11px] truncate ${audioDiagnostics.lastError || networkDiagnostics.lastError ? 'text-rose-400' : 'text-slate-500'}`}>
             {audioDiagnostics.lastError || networkDiagnostics.lastError || 'No errors reported. Pipeline healthy.'}

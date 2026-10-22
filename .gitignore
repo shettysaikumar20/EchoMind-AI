@@ -51,6 +51,7 @@ tmp/
 # Local Audio & Video Recordings
 recordings/
 *.wav
+!backend/tests/fixtures/*.wav
 *.mp3
 *.m4a
 *.webm
