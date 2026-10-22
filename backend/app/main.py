@@ -52,6 +52,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Root endpoints
+@app.get("/", tags=["Root"])
+def root():
+    return {
+        "app": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "status": "online",
+        "message": "EchoMind AI backend is live and operational.",
+        "docs": "/docs",
+        "health": "/api/health",
+        "endpoints": {
+            "sessions": "/api/sessions",
+            "health": "/api/health",
+            "settings": "/api/settings",
+            "docs": "/docs"
+        }
+    }
+
+
+@app.get("/api", tags=["Root"])
+def api_root():
+    return {
+        "app": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "status": "online",
+        "docs": "/docs",
+        "health": "/api/health"
+    }
+
+
 # Health endpoint
 @app.get("/api/health", tags=["Health"])
 def health_check(db: Session = Depends(get_db)):
