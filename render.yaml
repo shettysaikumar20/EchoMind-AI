@@ -23,6 +23,8 @@ services:
         value: meta-llama/llama-3.1-8b-instruct
       - key: SECRET_KEY
         generateValue: true
+      - key: CORS_ORIGINS
+        value: '["http://localhost:5173", "https://echomind-ai-frontend-mwcb.onrender.com", "https://echomind-ai.onrender.com"]'
 
   # EchoMind AI React Frontend
   - type: web
@@ -30,6 +32,9 @@ services:
     runtime: static
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: "./frontend/dist"
+    envVars:
+      - key: VITE_API_URL
+        value: https://echomind-ai-backend-d20k.onrender.com
     routes:
       - type: rewrite
         source: /*

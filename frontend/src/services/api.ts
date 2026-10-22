@@ -1,6 +1,44 @@
 import { Session, UserSettings, ProvidersResponse, User, TranscriptSegment, DetectedQuestion, CaptureMode } from '../types';
 
-const API_BASE = '/api';
+export function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    const trimmed = envUrl.trim().replace(/\/+$/, '');
+    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+  }
+
+  // In production on Render static site, connect to the production backend
+  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    return 'https://echomind-ai-backend-d20k.onrender.com/api';
+  }
+
+  // Local development fallback: proxied by Vite to http://127.0.0.1:8000
+  return '/api';
+}
+
+export function getWebSocketUrl(sessionId: string): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    const raw = envUrl.trim().replace(/\/+$/, '').replace(/\/api$/, '');
+    const wsProto = raw.startsWith('https:') ? 'wss:' : 'ws:';
+    const hostPart = raw.replace(/^https?:\/\//, '');
+    return `${wsProto}//${hostPart}/ws/sessions/${sessionId}/transcribe`;
+  }
+
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname.includes('onrender.com')) {
+      return `wss://echomind-ai-backend-d20k.onrender.com/ws/sessions/${sessionId}/transcribe`;
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    if (window.location.port === '5173') {
+      return `${protocol}//${window.location.hostname}:8000/ws/sessions/${sessionId}/transcribe`;
+    }
+    return `${protocol}//${window.location.host}/ws/sessions/${sessionId}/transcribe`;
+  }
+
+  return `ws://127.0.0.1:8000/ws/sessions/${sessionId}/transcribe`;
+}
 
 export function getAuthToken(): string | null {
   return localStorage.getItem('echomind_token');
@@ -25,27 +63,42 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const base = getApiBaseUrl();
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${base}${path}`;
+
+  const response = await fetch(url, {
     ...options,
     headers,
   });
 
+  const responseText = await response.text();
+
   if (!response.ok) {
-    let errorDetail = 'An unexpected error occurred';
-    try {
-      const err = await response.json();
-      errorDetail = err.detail || JSON.stringify(err);
-    } catch {
-      errorDetail = response.statusText;
+    let errorDetail = `Request failed (HTTP ${response.status})`;
+    if (responseText) {
+      try {
+        const err = JSON.parse(responseText);
+        errorDetail = err.detail || (typeof err === 'string' ? err : JSON.stringify(err));
+      } catch {
+        // Non-JSON response (e.g. HTML proxy errors)
+        errorDetail = responseText.length > 200 ? response.statusText || errorDetail : responseText;
+      }
+    } else if (response.statusText) {
+      errorDetail = `HTTP ${response.status}: ${response.statusText}`;
     }
     throw new Error(errorDetail);
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || !responseText || responseText.trim() === '') {
     return {} as T;
   }
 
-  return response.json();
+  try {
+    return JSON.parse(responseText) as T;
+  } catch {
+    throw new Error(`Invalid JSON response from server (${url}): ${responseText.slice(0, 100)}`);
+  }
 }
 
 export const api = {
@@ -53,7 +106,10 @@ export const api = {
   async createSession(title?: string, capture_mode: CaptureMode = 'mic'): Promise<Session> {
     return request<Session>('/sessions', {
       method: 'POST',
-      body: JSON.stringify({ title, capture_mode }),
+      body: JSON.stringify({
+        title: title || 'Live Conversation',
+        capture_mode: capture_mode || 'mic',
+      }),
     });
   },
 
@@ -117,10 +173,12 @@ export const api = {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/export?format=${format}`, {
-      headers,
-    });
-    if (!res.ok) throw new Error('Failed to export session');
+    const url = `${getApiBaseUrl()}/sessions/${sessionId}/export?format=${format}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(errText || `Failed to export session (HTTP ${res.status})`);
+    }
     return res.blob();
   },
 
@@ -148,7 +206,8 @@ export const api = {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     try {
-      const response = await fetch(`${API_BASE}/sessions/${sessionId}/answers?stream=true`, {
+      const url = `${getApiBaseUrl()}/sessions/${sessionId}/answers?stream=true`;
+      const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -158,7 +217,8 @@ export const api = {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errText = await response.text().catch(() => '');
+        throw new Error(errText || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const reader = response.body?.getReader();

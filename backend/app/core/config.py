@@ -31,7 +31,8 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
-        "https://echomind-ai.onrender.com"
+        "https://echomind-ai.onrender.com",
+        "https://echomind-ai-frontend-mwcb.onrender.com"
     ]
 
     model_config = SettingsConfigDict(

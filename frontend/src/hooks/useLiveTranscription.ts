@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { TranscriptSegment, CaptureMode } from '../types';
-import { api } from '../services/api';
+import { api, getWebSocketUrl } from '../services/api';
 
 export interface NetworkDiagnostics {
   wsState: 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED';
@@ -73,12 +73,7 @@ export function useLiveTranscription({
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // When running locally on Vite (port 5173), connect directly to FastAPI on port 8000
-    const wsUrl =
-      window.location.port === '5173'
-        ? `${protocol}//${window.location.hostname}:8000/ws/sessions/${sessionId}/transcribe`
-        : `${protocol}//${window.location.host}/ws/sessions/${sessionId}/transcribe`;
+    const wsUrl = getWebSocketUrl(sessionId);
 
     setNetworkDiagnostics((prev) => ({
       ...prev,
